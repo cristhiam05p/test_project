@@ -1,0 +1,208 @@
+:root {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.resource-timeline-page {
+  padding: 1.2rem;
+}
+
+header h1 {
+  margin: 0;
+}
+
+header p {
+  margin-top: 0.4rem;
+  color: #475569;
+}
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.filters select,
+.filters input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  min-width: 220px;
+}
+
+.timeline-shell {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.timeline-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.timeline-days {
+  display: flex;
+}
+
+.day-header {
+  border-left: 1px solid #cbd5e1;
+  padding: 0.35rem 0.2rem;
+  font-size: 0.7rem;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.day-header strong {
+  font-size: 0.65rem;
+  color: #334155;
+}
+
+.department-section h2 {
+  margin: 0;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.95rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.employee-row {
+  display: flex;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.employee-label {
+  width: 220px;
+  min-width: 220px;
+  padding: 0.6rem 0.8rem;
+  border-right: 1px solid #e2e8f0;
+  font-weight: 500;
+  background: #fcfdff;
+}
+
+.employee-label.header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.employee-timeline {
+  display: flex;
+  position: relative;
+  min-height: 52px;
+}
+
+.day-cell {
+  border-left: 1px solid #f1f5f9;
+}
+
+.task-block {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+}
+
+.task-block-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.task-block-project {
+  font-size: 0.64rem;
+  opacity: 0.9;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 1rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-panel {
+  width: min(460px, 95vw);
+  background: #fff;
+  padding: 1rem;
+  overflow: auto;
+  position: relative;
+}
+
+.close-button {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  border: 0;
+  background: #e2e8f0;
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.modal-panel h3 {
+  margin-right: 2rem;
+}
+
+.modal-panel dl {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0.5rem 0.7rem;
+}
+
+.modal-panel dt {
+  font-weight: 700;
+}
+
+.modal-panel dd {
+  margin: 0;
+}
+
+.deadline {
+  color: #dc2626;
+}

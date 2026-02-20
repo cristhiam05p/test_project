@@ -1,0 +1,1079 @@
+diff --git a/README.md b/README.md
+index c4a32e31abe35337f7f89d21a3938ab49501f70e..d3150ec535504e1718bcb4582688ae5349948c0f 100644
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,80 @@
+-# test_project
+-test
++# Resource Timeline MVP
++
++MVP para visualizar paquetes de trabajo por **departamento** y **empleado** en una línea de tiempo (4 semanas, día a día).
++
++## Stack
++
++- React + Vite + TypeScript
++- Sin backend (mock data local)
++
++## Funcionalidades incluidas
++
++- Vista principal "Recursos" con:
++  - Eje vertical: Departamentos -> empleados.
++  - Eje horizontal: 28 días (4 semanas) desde una fecha de demo.
++- Bloques de tareas por empleado usando:
++  - `scheduledStartDate` como inicio visual.
++  - `durationDays` para ancho del bloque.
++- Modal de detalle al seleccionar una tarea con:
++  - título, descripción, proyecto, fechas y dependencias.
++  - `deadlineDate` destacado visualmente.
++- Filtros mínimos:
++  - por departamento.
++  - por nombre de empleado (buscador).
++
++## Estructura principal
++
++```txt
++src/
++  components/
++    ResourceTimeline.tsx
++    DepartmentSection.tsx
++    EmployeeRow.tsx
++    TaskBlock.tsx
++    TaskDetailsModal.tsx
++  data/
++    mock-data.ts
++  types/
++    workPackage.ts
++  utils/
++    dateUtils.ts
++    timelineUtils.ts
++```
++
++## Preparado para siguientes iteraciones
++
++El código quedó separado para facilitar:
++
++1. **Vista por proyecto** y **vista global**: filtrar/reagrupar `workPackages` en `ResourceTimeline`.
++2. **Dependencias visuales (líneas/flechas)**: calcular coordenadas de `TaskBlock` y renderizar overlay SVG.
++3. **Importación Excel**: reemplazar `mock-data.ts` por parser/adapter que emita `WorkPackage[]`.
++4. **Scheduling automático**: agregar motor de cálculo que complete `scheduledStartDate` previo a render.
++
++## Cómo correr el proyecto
++
++1. Instalar dependencias:
++
++```bash
++npm install
++```
++
++2. Ejecutar servidor de desarrollo:
++
++```bash
++npm run dev
++```
++
++3. (Opcional) Build de producción:
++
++```bash
++npm run build
++```
++
++## Mock data
++
++`src/data/mock-data.ts` incluye ejemplos realistas con:
++
++- 3 departamentos (Hardware, Software, Producción).
++- 2-4 empleados por departamento.
++- 2-5 tareas por empleado (distribuidas en el dataset).
++- dependencias FS y SS en múltiples tareas.
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..9e908d1381092dd0632f217f368cb491a941bdfd
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,12 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>Resource Timeline MVP</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7391ca4d229e324047335009739f0e2b7c403d7
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,27 @@
++{
++  "name": "resource-timeline-mvp",
++  "private": true,
++  "version": "0.0.0",
++  "type": "module",
++  "scripts": {
++    "dev": "vite",
++    "build": "tsc && vite build",
++    "preview": "vite preview",
++    "lint": "eslint ."
++  },
++  "dependencies": {
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1"
++  },
++  "devDependencies": {
++    "@types/react": "^18.3.18",
++    "@types/react-dom": "^18.3.5",
++    "@vitejs/plugin-react": "^4.3.3",
++    "eslint": "^9.12.0",
++    "eslint-plugin-react-hooks": "^5.1.0",
++    "eslint-plugin-react-refresh": "^0.4.13",
++    "typescript": "^5.6.3",
++    "typescript-eslint": "^8.8.1",
++    "vite": "^5.4.10"
++  }
++}
+diff --git a/src/App.tsx b/src/App.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..e7013ea3228dc34963f6f044333d819160a4fb0e
+--- /dev/null
++++ b/src/App.tsx
+@@ -0,0 +1,8 @@
++import { ResourceTimeline } from './components/ResourceTimeline';
++import { demoStartDate, workPackages } from './data/mock-data';
++
++function App() {
++  return <ResourceTimeline tasks={workPackages} timelineStartDate={demoStartDate} />;
++}
++
++export default App;
+diff --git a/src/components/DepartmentSection.tsx b/src/components/DepartmentSection.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..0da3e1bb01f0f6b24f95b695f3e6d216f62e4820
+--- /dev/null
++++ b/src/components/DepartmentSection.tsx
+@@ -0,0 +1,38 @@
++import type { WorkPackage } from '../types/workPackage';
++import type { EmployeeGroup } from '../utils/timelineUtils';
++import { EmployeeRow } from './EmployeeRow';
++
++interface DepartmentSectionProps {
++  department: string;
++  employees: EmployeeGroup[];
++  timelineStartDate: string;
++  timelineDays: number;
++  dayWidth: number;
++  onTaskSelect: (task: WorkPackage) => void;
++}
++
++export const DepartmentSection = ({
++  department,
++  employees,
++  timelineStartDate,
++  timelineDays,
++  dayWidth,
++  onTaskSelect,
++}: DepartmentSectionProps) => {
++  return (
++    <section className="department-section">
++      <h2>{department}</h2>
++      {employees.map((employee) => (
++        <EmployeeRow
++          key={employee.employeeId}
++          employeeName={employee.employeeName}
++          tasks={employee.tasks}
++          timelineStartDate={timelineStartDate}
++          timelineDays={timelineDays}
++          dayWidth={dayWidth}
++          onTaskSelect={onTaskSelect}
++        />
++      ))}
++    </section>
++  );
++};
+diff --git a/src/components/EmployeeRow.tsx b/src/components/EmployeeRow.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..440845f10f9707a12300d6bb3219bce5f0e80e86
+--- /dev/null
++++ b/src/components/EmployeeRow.tsx
+@@ -0,0 +1,40 @@
++import type { WorkPackage } from '../types/workPackage';
++import { TaskBlock } from './TaskBlock';
++
++interface EmployeeRowProps {
++  employeeName: string;
++  tasks: WorkPackage[];
++  timelineStartDate: string;
++  timelineDays: number;
++  dayWidth: number;
++  onTaskSelect: (task: WorkPackage) => void;
++}
++
++export const EmployeeRow = ({
++  employeeName,
++  tasks,
++  timelineStartDate,
++  timelineDays,
++  dayWidth,
++  onTaskSelect,
++}: EmployeeRowProps) => {
++  return (
++    <div className="employee-row">
++      <div className="employee-label">{employeeName}</div>
++      <div className="employee-timeline" style={{ width: dayWidth * timelineDays }}>
++        {Array.from({ length: timelineDays }, (_, index) => (
++          <div key={index} className="day-cell" style={{ width: dayWidth }} />
++        ))}
++        {tasks.map((task) => (
++          <TaskBlock
++            key={task.id}
++            task={task}
++            timelineStartDate={timelineStartDate}
++            dayWidth={dayWidth}
++            onSelect={onTaskSelect}
++          />
++        ))}
++      </div>
++    </div>
++  );
++};
+diff --git a/src/components/ResourceTimeline.tsx b/src/components/ResourceTimeline.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..64a9f64420cdadac6cd7f52f2604eae76d02c656
+--- /dev/null
++++ b/src/components/ResourceTimeline.tsx
+@@ -0,0 +1,117 @@
++import { useMemo, useState } from 'react';
++import type { WorkPackage } from '../types/workPackage';
++import { formatDayLabel, getDayRange, getWeekLabel } from '../utils/dateUtils';
++import { groupByDepartmentAndEmployee } from '../utils/timelineUtils';
++import { DepartmentSection } from './DepartmentSection';
++import { TaskDetailsModal } from './TaskDetailsModal';
++
++interface ResourceTimelineProps {
++  tasks: WorkPackage[];
++  timelineStartDate: string;
++  timelineDays?: number;
++}
++
++const DAY_WIDTH = 42;
++
++export const ResourceTimeline = ({
++  tasks,
++  timelineStartDate,
++  timelineDays = 28,
++}: ResourceTimelineProps) => {
++  const [selectedTask, setSelectedTask] = useState<WorkPackage | null>(null);
++  const [selectedDepartment, setSelectedDepartment] = useState<string>('Todos');
++  const [employeeQuery, setEmployeeQuery] = useState<string>('');
++
++  const departments = useMemo(
++    () => ['Todos', ...new Set(tasks.map((task) => task.department))],
++    [tasks],
++  );
++
++  const filteredTasks = useMemo(() => {
++    return tasks.filter((task) => {
++      const matchesDepartment =
++        selectedDepartment === 'Todos' || task.department === selectedDepartment;
++      const matchesEmployee = task.employeeName
++        .toLowerCase()
++        .includes(employeeQuery.trim().toLowerCase());
++      return matchesDepartment && matchesEmployee;
++    });
++  }, [tasks, selectedDepartment, employeeQuery]);
++
++  const groupedData = useMemo(() => groupByDepartmentAndEmployee(filteredTasks), [filteredTasks]);
++
++  const dayRange = useMemo(
++    () => getDayRange(timelineStartDate, timelineDays),
++    [timelineDays, timelineStartDate],
++  );
++
++  const taskTitleById = useMemo(() => {
++    return new Map(tasks.map((task) => [task.id, task.title]));
++  }, [tasks]);
++
++  return (
++    <div className="resource-timeline-page">
++      <header>
++        <h1>Vista Recursos (MVP)</h1>
++        <p>Visualización por departamento y empleado para saber quién está haciendo qué y cuándo.</p>
++      </header>
++
++      <section className="filters">
++        <label>
++          Departamento
++          <select
++            value={selectedDepartment}
++            onChange={(event) => setSelectedDepartment(event.target.value)}
++          >
++            {departments.map((department) => (
++              <option key={department} value={department}>
++                {department}
++              </option>
++            ))}
++          </select>
++        </label>
++
++        <label>
++          Empleado
++          <input
++            placeholder="Buscar por nombre"
++            value={employeeQuery}
++            onChange={(event) => setEmployeeQuery(event.target.value)}
++          />
++        </label>
++      </section>
++
++      <div className="timeline-shell">
++        <div className="timeline-header">
++          <div className="employee-label header">Departamento / Empleado</div>
++          <div className="timeline-days" style={{ width: DAY_WIDTH * timelineDays }}>
++            {dayRange.map((day, index) => (
++              <div key={index} className="day-header" style={{ width: DAY_WIDTH }}>
++                <strong>{getWeekLabel(day)}</strong>
++                <span>{formatDayLabel(day)}</span>
++              </div>
++            ))}
++          </div>
++        </div>
++
++        {groupedData.length === 0 ? (
++          <p className="empty-state">No hay tareas con los filtros actuales.</p>
++        ) : (
++          groupedData.map((department) => (
++            <DepartmentSection
++              key={department.department}
++              department={department.department}
++              employees={department.employees}
++              timelineStartDate={timelineStartDate}
++              timelineDays={timelineDays}
++              dayWidth={DAY_WIDTH}
++              onTaskSelect={setSelectedTask}
++            />
++          ))
++        )}
++      </div>
++
++      <TaskDetailsModal task={selectedTask} taskTitleById={taskTitleById} onClose={() => setSelectedTask(null)} />
++    </div>
++  );
++};
+diff --git a/src/components/TaskBlock.tsx b/src/components/TaskBlock.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..ecf548cfe136e4e6f1b3d268508dd025074b9e4d
+--- /dev/null
++++ b/src/components/TaskBlock.tsx
+@@ -0,0 +1,27 @@
++import type { WorkPackage } from '../types/workPackage';
++import { getTaskOffsetDays } from '../utils/timelineUtils';
++
++interface TaskBlockProps {
++  task: WorkPackage;
++  timelineStartDate: string;
++  dayWidth: number;
++  onSelect: (task: WorkPackage) => void;
++}
++
++export const TaskBlock = ({ task, timelineStartDate, dayWidth, onSelect }: TaskBlockProps) => {
++  const left = getTaskOffsetDays(timelineStartDate, task.scheduledStartDate) * dayWidth;
++  const width = task.durationDays * dayWidth;
++
++  return (
++    <button
++      className="task-block"
++      style={{ left, width }}
++      onClick={() => onSelect(task)}
++      title={`${task.title} (${task.projectName})`}
++      type="button"
++    >
++      <span className="task-block-title">{task.title}</span>
++      <span className="task-block-project">{task.projectName}</span>
++    </button>
++  );
++};
+diff --git a/src/components/TaskDetailsModal.tsx b/src/components/TaskDetailsModal.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf1ca76f1a5729d527a265df502f76921bcc8ab0
+--- /dev/null
++++ b/src/components/TaskDetailsModal.tsx
+@@ -0,0 +1,62 @@
++import type { WorkPackage } from '../types/workPackage';
++
++interface TaskDetailsModalProps {
++  task: WorkPackage | null;
++  taskTitleById: Map<string, string>;
++  onClose: () => void;
++}
++
++export const TaskDetailsModal = ({ task, taskTitleById, onClose }: TaskDetailsModalProps) => {
++  if (!task) {
++    return null;
++  }
++
++  return (
++    <div className="modal-overlay" onClick={onClose} role="presentation">
++      <aside className="modal-panel" onClick={(event) => event.stopPropagation()}>
++        <button className="close-button" onClick={onClose} type="button">
++          ✕
++        </button>
++        <h3>{task.title}</h3>
++        <p>{task.description}</p>
++
++        <dl>
++          <dt>Proyecto</dt>
++          <dd>
++            {task.projectName} ({task.projectId})
++          </dd>
++
++          <dt>Fecha programada</dt>
++          <dd>{task.scheduledStartDate}</dd>
++
++          <dt>Inicio más temprano</dt>
++          <dd>{task.earliestStartDate}</dd>
++
++          <dt className="deadline">Fecha límite</dt>
++          <dd className="deadline">{task.deadlineDate}</dd>
++
++          <dt>Duración (días)</dt>
++          <dd>{task.durationDays}</dd>
++
++          <dt>Dependencias</dt>
++          <dd>
++            {task.dependencies.length === 0 ? (
++              'Sin dependencias'
++            ) : (
++              <ul>
++                {task.dependencies.map((dependency) => (
++                  <li key={`${dependency.type}-${dependency.taskId}`}>
++                    {dependency.type} → {dependency.taskId}
++                    {taskTitleById.has(dependency.taskId)
++                      ? ` (${taskTitleById.get(dependency.taskId)})`
++                      : ''}
++                  </li>
++                ))}
++              </ul>
++            )}
++          </dd>
++        </dl>
++      </aside>
++    </div>
++  );
++};
+diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f39865d7590a4cec486ffc13b5e874e5ce6ebcb9
+--- /dev/null
++++ b/src/data/mock-data.ts
+@@ -0,0 +1,218 @@
++import type { WorkPackage } from '../types/workPackage';
++
++export const demoStartDate = '2026-03-02';
++
++export const workPackages: WorkPackage[] = [
++  {
++    id: 'HW-001',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Hardware',
++    employeeId: 'EMP-HW-01',
++    employeeName: 'María Rojas',
++    title: 'Diseño de esquemático base',
++    description: 'Crear y validar el esquemático principal del módulo de alimentación.',
++    earliestStartDate: '2026-03-02',
++    deadlineDate: '2026-03-10',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-02',
++    dependencies: [],
++  },
++  {
++    id: 'HW-002',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Hardware',
++    employeeId: 'EMP-HW-01',
++    employeeName: 'María Rojas',
++    title: 'Layout PCB v1',
++    description: 'Ruteo inicial y revisión de reglas de diseño para manufactura.',
++    earliestStartDate: '2026-03-06',
++    deadlineDate: '2026-03-18',
++    durationDays: 5,
++    scheduledStartDate: '2026-03-09',
++    dependencies: [{ type: 'FS', taskId: 'HW-001' }],
++  },
++  {
++    id: 'HW-003',
++    projectId: 'P-BETA',
++    projectName: 'Sensor Beta',
++    department: 'Hardware',
++    employeeId: 'EMP-HW-02',
++    employeeName: 'Luis Mendoza',
++    title: 'Selección de componentes',
++    description: 'Elegir componentes de bajo consumo con lead times compatibles.',
++    earliestStartDate: '2026-03-02',
++    deadlineDate: '2026-03-08',
++    durationDays: 3,
++    scheduledStartDate: '2026-03-03',
++    dependencies: [],
++  },
++  {
++    id: 'HW-004',
++    projectId: 'P-BETA',
++    projectName: 'Sensor Beta',
++    department: 'Hardware',
++    employeeId: 'EMP-HW-02',
++    employeeName: 'Luis Mendoza',
++    title: 'Prueba térmica preliminar',
++    description: 'Ensayo rápido de disipación en prototipo para validar margen de temperatura.',
++    earliestStartDate: '2026-03-09',
++    deadlineDate: '2026-03-20',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-12',
++    dependencies: [{ type: 'FS', taskId: 'HW-003' }],
++  },
++  {
++    id: 'HW-005',
++    projectId: 'P-GAMMA',
++    projectName: 'Gateway Gamma',
++    department: 'Hardware',
++    employeeId: 'EMP-HW-03',
++    employeeName: 'Ana Pardo',
++    title: 'Validación de EMC',
++    description: 'Definir plan y ejecutar pre-check de compatibilidad electromagnética.',
++    earliestStartDate: '2026-03-11',
++    deadlineDate: '2026-03-24',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-16',
++    dependencies: [{ type: 'SS', taskId: 'HW-002' }],
++  },
++
++  {
++    id: 'SW-001',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Software',
++    employeeId: 'EMP-SW-01',
++    employeeName: 'Diego León',
++    title: 'Arquitectura del firmware',
++    description: 'Definir módulos de firmware y contratos de interfaces internas.',
++    earliestStartDate: '2026-03-02',
++    deadlineDate: '2026-03-09',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-02',
++    dependencies: [],
++  },
++  {
++    id: 'SW-002',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Software',
++    employeeId: 'EMP-SW-01',
++    employeeName: 'Diego León',
++    title: 'Drivers de comunicación',
++    description: 'Implementar capa de drivers para UART e I2C.',
++    earliestStartDate: '2026-03-08',
++    deadlineDate: '2026-03-17',
++    durationDays: 5,
++    scheduledStartDate: '2026-03-10',
++    dependencies: [{ type: 'FS', taskId: 'SW-001' }],
++  },
++  {
++    id: 'SW-003',
++    projectId: 'P-BETA',
++    projectName: 'Sensor Beta',
++    department: 'Software',
++    employeeId: 'EMP-SW-02',
++    employeeName: 'Sofía Nieto',
++    title: 'API de telemetría',
++    description: 'Crear endpoints y payloads para envío de métricas del sensor.',
++    earliestStartDate: '2026-03-03',
++    deadlineDate: '2026-03-12',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-05',
++    dependencies: [],
++  },
++  {
++    id: 'SW-004',
++    projectId: 'P-BETA',
++    projectName: 'Sensor Beta',
++    department: 'Software',
++    employeeId: 'EMP-SW-02',
++    employeeName: 'Sofía Nieto',
++    title: 'Autenticación de dispositivos',
++    description: 'Implementar flujo de enrolamiento y token de dispositivo.',
++    earliestStartDate: '2026-03-10',
++    deadlineDate: '2026-03-22',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-13',
++    dependencies: [{ type: 'FS', taskId: 'SW-003' }],
++  },
++  {
++    id: 'SW-005',
++    projectId: 'P-GAMMA',
++    projectName: 'Gateway Gamma',
++    department: 'Software',
++    employeeId: 'EMP-SW-03',
++    employeeName: 'Carlos Núñez',
++    title: 'Dashboard de diagnóstico',
++    description: 'Construir panel web interno para ver estado de nodos conectados.',
++    earliestStartDate: '2026-03-09',
++    deadlineDate: '2026-03-24',
++    durationDays: 6,
++    scheduledStartDate: '2026-03-11',
++    dependencies: [{ type: 'SS', taskId: 'SW-002' }],
++  },
++
++  {
++    id: 'PR-001',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Producción',
++    employeeId: 'EMP-PR-01',
++    employeeName: 'Elena Torres',
++    title: 'Plan de montaje piloto',
++    description: 'Definir flujo de ensamblaje para lote piloto de 50 unidades.',
++    earliestStartDate: '2026-03-04',
++    deadlineDate: '2026-03-14',
++    durationDays: 4,
++    scheduledStartDate: '2026-03-06',
++    dependencies: [{ type: 'SS', taskId: 'HW-002' }],
++  },
++  {
++    id: 'PR-002',
++    projectId: 'P-ALPHA',
++    projectName: 'Controlador Alpha',
++    department: 'Producción',
++    employeeId: 'EMP-PR-02',
++    employeeName: 'Jorge Vidal',
++    title: 'Balanceo de línea',
++    description: 'Ajustar tiempos estándar y secuencia de estaciones.',
++    earliestStartDate: '2026-03-10',
++    deadlineDate: '2026-03-21',
++    durationDays: 5,
++    scheduledStartDate: '2026-03-12',
++    dependencies: [{ type: 'FS', taskId: 'PR-001' }],
++  },
++  {
++    id: 'PR-003',
++    projectId: 'P-BETA',
++    projectName: 'Sensor Beta',
++    department: 'Producción',
++    employeeId: 'EMP-PR-03',
++    employeeName: 'Valeria Solís',
++    title: 'Checklist de calidad inicial',
++    description: 'Crear checklist para control visual y eléctrico del producto.',
++    earliestStartDate: '2026-03-03',
++    deadlineDate: '2026-03-11',
++    durationDays: 3,
++    scheduledStartDate: '2026-03-04',
++    dependencies: [],
++  },
++  {
++    id: 'PR-004',
++    projectId: 'P-GAMMA',
++    projectName: 'Gateway Gamma',
++    department: 'Producción',
++    employeeId: 'EMP-PR-03',
++    employeeName: 'Valeria Solís',
++    title: 'Corrida piloto de empaque',
++    description: 'Ejecutar prueba de empaque y etiquetado para exportación.',
++    earliestStartDate: '2026-03-17',
++    deadlineDate: '2026-03-28',
++    durationDays: 3,
++    scheduledStartDate: '2026-03-19',
++    dependencies: [{ type: 'FS', taskId: 'PR-003' }],
++  },
++];
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f7da6f6e34bbc6fc2c671ac2607f5480c83cdda
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,10 @@
++import React from 'react';
++import ReactDOM from 'react-dom/client';
++import App from './App';
++import './styles.css';
++
++ReactDOM.createRoot(document.getElementById('root')!).render(
++  <React.StrictMode>
++    <App />
++  </React.StrictMode>,
++);
+diff --git a/src/styles.css b/src/styles.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..408b94c6245d0811983faf19fe49ef3a3d15f906
+--- /dev/null
++++ b/src/styles.css
+@@ -0,0 +1,208 @@
++:root {
++  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
++  color: #0f172a;
++  background: #f8fafc;
++}
++
++* {
++  box-sizing: border-box;
++}
++
++body {
++  margin: 0;
++}
++
++.resource-timeline-page {
++  padding: 1.2rem;
++}
++
++header h1 {
++  margin: 0;
++}
++
++header p {
++  margin-top: 0.4rem;
++  color: #475569;
++}
++
++.filters {
++  display: flex;
++  gap: 1rem;
++  margin: 1rem 0;
++}
++
++.filters label {
++  display: flex;
++  flex-direction: column;
++  gap: 0.3rem;
++  font-weight: 600;
++  font-size: 0.9rem;
++}
++
++.filters select,
++.filters input {
++  border: 1px solid #cbd5e1;
++  border-radius: 8px;
++  padding: 0.45rem 0.6rem;
++  min-width: 220px;
++}
++
++.timeline-shell {
++  background: #fff;
++  border: 1px solid #e2e8f0;
++  border-radius: 12px;
++  overflow: auto;
++}
++
++.timeline-header {
++  display: flex;
++  position: sticky;
++  top: 0;
++  z-index: 4;
++  background: #f1f5f9;
++  border-bottom: 1px solid #cbd5e1;
++}
++
++.timeline-days {
++  display: flex;
++}
++
++.day-header {
++  border-left: 1px solid #cbd5e1;
++  padding: 0.35rem 0.2rem;
++  font-size: 0.7rem;
++  min-height: 52px;
++  display: flex;
++  flex-direction: column;
++  justify-content: center;
++}
++
++.day-header strong {
++  font-size: 0.65rem;
++  color: #334155;
++}
++
++.department-section h2 {
++  margin: 0;
++  padding: 0.55rem 0.8rem;
++  font-size: 0.95rem;
++  border-bottom: 1px solid #e2e8f0;
++  background: #f8fafc;
++}
++
++.employee-row {
++  display: flex;
++  border-bottom: 1px solid #eef2f7;
++}
++
++.employee-label {
++  width: 220px;
++  min-width: 220px;
++  padding: 0.6rem 0.8rem;
++  border-right: 1px solid #e2e8f0;
++  font-weight: 500;
++  background: #fcfdff;
++}
++
++.employee-label.header {
++  font-size: 0.8rem;
++  font-weight: 700;
++  text-transform: uppercase;
++}
++
++.employee-timeline {
++  display: flex;
++  position: relative;
++  min-height: 52px;
++}
++
++.day-cell {
++  border-left: 1px solid #f1f5f9;
++}
++
++.task-block {
++  position: absolute;
++  top: 8px;
++  bottom: 8px;
++  border: 0;
++  border-radius: 8px;
++  background: linear-gradient(135deg, #3b82f6, #2563eb);
++  color: #fff;
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  justify-content: center;
++  padding: 0.2rem 0.4rem;
++  cursor: pointer;
++  text-align: left;
++  overflow: hidden;
++}
++
++.task-block-title {
++  font-size: 0.72rem;
++  font-weight: 700;
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  width: 100%;
++}
++
++.task-block-project {
++  font-size: 0.64rem;
++  opacity: 0.9;
++}
++
++.empty-state {
++  margin: 0;
++  padding: 1rem;
++}
++
++.modal-overlay {
++  position: fixed;
++  inset: 0;
++  background: rgba(15, 23, 42, 0.45);
++  display: flex;
++  justify-content: flex-end;
++}
++
++.modal-panel {
++  width: min(460px, 95vw);
++  background: #fff;
++  padding: 1rem;
++  overflow: auto;
++  position: relative;
++}
++
++.close-button {
++  position: absolute;
++  right: 10px;
++  top: 10px;
++  border: 0;
++  background: #e2e8f0;
++  border-radius: 999px;
++  width: 30px;
++  height: 30px;
++  cursor: pointer;
++}
++
++.modal-panel h3 {
++  margin-right: 2rem;
++}
++
++.modal-panel dl {
++  display: grid;
++  grid-template-columns: 160px 1fr;
++  gap: 0.5rem 0.7rem;
++}
++
++.modal-panel dt {
++  font-weight: 700;
++}
++
++.modal-panel dd {
++  margin: 0;
++}
++
++.deadline {
++  color: #dc2626;
++}
+diff --git a/src/types/workPackage.ts b/src/types/workPackage.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..85d52dc7eaa3294cfa86aade474d8a181cf5bd50
+--- /dev/null
++++ b/src/types/workPackage.ts
+@@ -0,0 +1,22 @@
++export type DependencyType = 'FS' | 'SS';
++
++export interface WorkDependency {
++  type: DependencyType;
++  taskId: string;
++}
++
++export interface WorkPackage {
++  id: string;
++  projectId: string;
++  projectName: string;
++  department: string;
++  employeeId: string;
++  employeeName: string;
++  title: string;
++  description: string;
++  earliestStartDate: string;
++  deadlineDate: string;
++  durationDays: number;
++  scheduledStartDate: string;
++  dependencies: WorkDependency[];
++}
+diff --git a/src/utils/dateUtils.ts b/src/utils/dateUtils.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..abca88c82005d265c9df279494993d19c89b9fcc
+--- /dev/null
++++ b/src/utils/dateUtils.ts
+@@ -0,0 +1,34 @@
++const DAY_IN_MS = 24 * 60 * 60 * 1000;
++
++export const toDate = (value: string): Date => {
++  const date = new Date(`${value}T00:00:00`);
++  return new Date(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
++};
++
++export const formatISODate = (date: Date): string => date.toISOString().slice(0, 10);
++
++export const addDays = (date: Date, days: number): Date => {
++  const output = new Date(date);
++  output.setDate(output.getDate() + days);
++  return output;
++};
++
++export const differenceInDays = (start: Date, end: Date): number => {
++  return Math.floor((end.getTime() - start.getTime()) / DAY_IN_MS);
++};
++
++export const getDayRange = (startDate: string, totalDays: number): Date[] => {
++  const start = toDate(startDate);
++  return Array.from({ length: totalDays }, (_, index) => addDays(start, index));
++};
++
++export const getWeekLabel = (date: Date): string => {
++  const firstDay = new Date(date.getFullYear(), 0, 1);
++  const dayOffset = Math.floor((date.getTime() - firstDay.getTime()) / DAY_IN_MS);
++  const week = Math.ceil((dayOffset + firstDay.getDay() + 1) / 7);
++  return `Sem ${week}`;
++};
++
++export const formatDayLabel = (date: Date): string => {
++  return date.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit' });
++};
+diff --git a/src/utils/timelineUtils.ts b/src/utils/timelineUtils.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..e6127f8ebdbbb1b2b220821cee59830f0e572614
+--- /dev/null
++++ b/src/utils/timelineUtils.ts
+@@ -0,0 +1,48 @@
++import type { WorkPackage } from '../types/workPackage';
++import { differenceInDays, toDate } from './dateUtils';
++
++export interface EmployeeGroup {
++  employeeId: string;
++  employeeName: string;
++  tasks: WorkPackage[];
++}
++
++export interface DepartmentGroup {
++  department: string;
++  employees: EmployeeGroup[];
++}
++
++export const groupByDepartmentAndEmployee = (tasks: WorkPackage[]): DepartmentGroup[] => {
++  const departments = new Map<string, Map<string, EmployeeGroup>>();
++
++  tasks.forEach((task) => {
++    if (!departments.has(task.department)) {
++      departments.set(task.department, new Map());
++    }
++
++    const employees = departments.get(task.department)!;
++    if (!employees.has(task.employeeId)) {
++      employees.set(task.employeeId, {
++        employeeId: task.employeeId,
++        employeeName: task.employeeName,
++        tasks: [],
++      });
++    }
++
++    employees.get(task.employeeId)!.tasks.push(task);
++  });
++
++  return [...departments.entries()].map(([department, employeeMap]) => ({
++    department,
++    employees: [...employeeMap.values()].map((employee) => ({
++      ...employee,
++      tasks: employee.tasks.sort((a, b) =>
++        toDate(a.scheduledStartDate).getTime() - toDate(b.scheduledStartDate).getTime(),
++      ),
++    })),
++  }));
++};
++
++export const getTaskOffsetDays = (timelineStartDate: string, taskStartDate: string): number => {
++  return differenceInDays(toDate(timelineStartDate), toDate(taskStartDate));
++};
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..cbf889e24331eda689de050f3b1ce2ba584c012e
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,18 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "useDefineForClassFields": true,
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "skipLibCheck": true,
++    "moduleResolution": "Bundler",
++    "allowImportingTsExtensions": false,
++    "resolveJsonModule": true,
++    "isolatedModules": true,
++    "noEmit": true,
++    "jsx": "react-jsx",
++    "strict": true,
++    "noFallthroughCasesInSwitch": true
++  },
++  "include": ["src"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..0466183af6ac8a9f74ced8fe1d8bcbf6c85dce5e
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,6 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++
++export default defineConfig({
++  plugins: [react()],
++});
+

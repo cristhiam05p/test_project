@@ -1,0 +1,84 @@
+diff a/README.md b/README.md	(rejected hunks)
+@@ -1,2 +1,80 @@
+-# test_project
+-test
++# Resource Timeline MVP
++
++MVP para visualizar paquetes de trabajo por **departamento** y **empleado** en una línea de tiempo (4 semanas, día a día).
++
++## Stack
++
++- React + Vite + TypeScript
++- Sin backend (mock data local)
++
++## Funcionalidades incluidas
++
++- Vista principal "Recursos" con:
++  - Eje vertical: Departamentos -> empleados.
++  - Eje horizontal: 28 días (4 semanas) desde una fecha de demo.
++- Bloques de tareas por empleado usando:
++  - `scheduledStartDate` como inicio visual.
++  - `durationDays` para ancho del bloque.
++- Modal de detalle al seleccionar una tarea con:
++  - título, descripción, proyecto, fechas y dependencias.
++  - `deadlineDate` destacado visualmente.
++- Filtros mínimos:
++  - por departamento.
++  - por nombre de empleado (buscador).
++
++## Estructura principal
++
++```txt
++src/
++  components/
++    ResourceTimeline.tsx
++    DepartmentSection.tsx
++    EmployeeRow.tsx
++    TaskBlock.tsx
++    TaskDetailsModal.tsx
++  data/
++    mock-data.ts
++  types/
++    workPackage.ts
++  utils/
++    dateUtils.ts
++    timelineUtils.ts
++```
++
++## Preparado para siguientes iteraciones
++
++El código quedó separado para facilitar:
++
++1. **Vista por proyecto** y **vista global**: filtrar/reagrupar `workPackages` en `ResourceTimeline`.
++2. **Dependencias visuales (líneas/flechas)**: calcular coordenadas de `TaskBlock` y renderizar overlay SVG.
++3. **Importación Excel**: reemplazar `mock-data.ts` por parser/adapter que emita `WorkPackage[]`.
++4. **Scheduling automático**: agregar motor de cálculo que complete `scheduledStartDate` previo a render.
++
++## Cómo correr el proyecto
++
++1. Instalar dependencias:
++
++```bash
++npm install
++```
++
++2. Ejecutar servidor de desarrollo:
++
++```bash
++npm run dev
++```
++
++3. (Opcional) Build de producción:
++
++```bash
++npm run build
++```
++
++## Mock data
++
++`src/data/mock-data.ts` incluye ejemplos realistas con:
++
++- 3 departamentos (Hardware, Software, Producción).
++- 2-4 empleados por departamento.
++- 2-5 tareas por empleado (distribuidas en el dataset).
++- dependencias FS y SS en múltiples tareas.
