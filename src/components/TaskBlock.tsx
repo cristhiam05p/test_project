@@ -1,5 +1,5 @@
-import type { WorkPackage } from '../types/workPackage';
-import { getTaskOffsetDays } from '../utils/timelineUtils';
+import type { WorkPackage } from "../types/workPackage";
+import { getTaskOffsetDays } from "../utils/timelineUtils";
 
 interface TaskBlockProps {
   task: WorkPackage;
@@ -8,14 +8,20 @@ interface TaskBlockProps {
   onSelect: (task: WorkPackage) => void;
 }
 
-export const TaskBlock = ({ task, timelineStartDate, dayWidth, onSelect }: TaskBlockProps) => {
-  const left = getTaskOffsetDays(timelineStartDate, task.scheduledStartDate) * dayWidth;
+export const TaskBlock = ({
+  task,
+  timelineStartDate,
+  dayWidth,
+  onSelect,
+}: TaskBlockProps) => {
+  const left =
+    getTaskOffsetDays(timelineStartDate, task.scheduledStartDate) * dayWidth;
   const width = task.durationDays * dayWidth;
 
   return (
     <button
       className="task-block"
-      style={{ left, width }}
+      style={{ left, width, background: task.projectColor }}
       onClick={() => onSelect(task)}
       title={`${task.title} (${task.projectName})`}
       type="button"
