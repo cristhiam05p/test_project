@@ -1,4 +1,6 @@
-import type { WorkPackage } from '../types/workPackage';
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import type { WorkPackage } from "../types/workPackage";
 
 interface TaskDetailsModalProps {
   task: WorkPackage | null;
@@ -6,24 +8,55 @@ interface TaskDetailsModalProps {
   onClose: () => void;
 }
 
-export const TaskDetailsModal = ({ task, taskTitleById, onClose }: TaskDetailsModalProps) => {
+export const TaskDetailsModal = ({
+  task,
+  taskTitleById,
+  onClose,
+}: TaskDetailsModalProps) => {
+  useEffect(() => {
+    if (!task) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [task]);
+
   if (!task) {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose} role="presentation">
-      <aside className="modal-panel" onClick={(event) => event.stopPropagation()}>
-        <button className="close-button" onClick={onClose} type="button">
+      <aside
+        className="modal-panel"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          className="close-button"
+          onClick={onClose}
+          type="button"
+          aria-label="Cerrar detalles"
+        >
           ✕
         </button>
+
         <h3>{task.title}</h3>
         <p>{task.description}</p>
 
         <dl>
           <dt>Proyecto</dt>
           <dd>
-            {task.projectName} ({task.projectId})
+            <span className="project-chip">
+              <i
+                style={{ backgroundColor: task.projectColor }}
+                aria-hidden="true"
+              />
+              {task.projectName} ({task.projectId})
+            </span>
           </dd>
 
           <dt>Fecha programada</dt>
@@ -41,7 +74,7 @@ export const TaskDetailsModal = ({ task, taskTitleById, onClose }: TaskDetailsMo
           <dt>Dependencias</dt>
           <dd>
             {task.dependencies.length === 0 ? (
-              'Sin dependencias'
+              "Sin dependencias"
             ) : (
               <ul>
                 {task.dependencies.map((dependency) => (
@@ -49,7 +82,7 @@ export const TaskDetailsModal = ({ task, taskTitleById, onClose }: TaskDetailsMo
                     {dependency.type} → {dependency.taskId}
                     {taskTitleById.has(dependency.taskId)
                       ? ` (${taskTitleById.get(dependency.taskId)})`
-                      : ''}
+                      : ""}
                   </li>
                 ))}
               </ul>
@@ -57,6 +90,7 @@ export const TaskDetailsModal = ({ task, taskTitleById, onClose }: TaskDetailsMo
           </dd>
         </dl>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 };

@@ -1,14 +1,12 @@
 export const normalizeText = (value: string): string => {
   return value
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 };
 
 const levenshteinDistance = (a: string, b: string): number => {
-  const matrix = Array.from({ length: a.length + 1 }, () =>
-    new Array<number>(b.length + 1).fill(0),
-  );
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
 
   for (let i = 0; i <= a.length; i += 1) {
     matrix[i][0] = i;

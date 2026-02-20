@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import type { WorkPackage } from '../types/workPackage';
-import { formatDayLabel, getDayRange, getWeekLabel } from '../utils/dateUtils';
-import { groupByDepartmentAndEmployee } from '../utils/timelineUtils';
-import { DepartmentSection } from './DepartmentSection';
-import { TaskDetailsModal } from './TaskDetailsModal';
+import { useMemo, useState } from "react";
+import type { WorkPackage } from "../types/workPackage";
+import { formatDayLabel, getDayRange, getWeekLabel } from "../utils/dateUtils";
+import { includesNormalized } from "../utils/textUtils";
+import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
+import { DepartmentSection } from "./DepartmentSection";
+import { TaskDetailsModal } from "./TaskDetailsModal";
 
 interface ResourceTimelineProps {
   tasks: WorkPackage[];
@@ -19,26 +20,50 @@ export const ResourceTimeline = ({
   timelineDays = 28,
 }: ResourceTimelineProps) => {
   const [selectedTask, setSelectedTask] = useState<WorkPackage | null>(null);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('Todos');
-  const [employeeQuery, setEmployeeQuery] = useState<string>('');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("Todos");
+  const [employeeQuery, setEmployeeQuery] = useState<string>("");
 
   const departments = useMemo(
-    () => ['Todos', ...new Set(tasks.map((task) => task.department))],
+    () => ["Todos", ...new Set(tasks.map((task) => task.department))],
     [tasks],
   );
+
+  const projectLegend = useMemo(() => {
+    const projects = new Map<
+      string,
+      { projectName: string; projectColor: string }
+    >();
+    tasks.forEach((task) => {
+      projects.set(task.projectId, {
+        projectName: task.projectName,
+        projectColor: task.projectColor,
+      });
+    });
+    return [...projects.entries()].map(([projectId, data]) => ({
+      projectId,
+      ...data,
+    }));
+  }, [tasks]);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       const matchesDepartment =
-        selectedDepartment === 'Todos' || task.department === selectedDepartment;
-      const matchesEmployee = task.employeeName
-        .toLowerCase()
-        .includes(employeeQuery.trim().toLowerCase());
-      return matchesDepartment && matchesEmployee;
+        selectedDepartment === "Todos" ||
+        task.department === selectedDepartment;
+
+      const matchesSearch =
+        includesNormalized(task.employeeName, employeeQuery) ||
+        includesNormalized(task.title, employeeQuery) ||
+        includesNormalized(task.description, employeeQuery);
+
+      return matchesDepartment && matchesSearch;
     });
   }, [tasks, selectedDepartment, employeeQuery]);
 
-  const groupedData = useMemo(() => groupByDepartmentAndEmployee(filteredTasks), [filteredTasks]);
+  const groupedData = useMemo(
+    () => groupByDepartmentAndEmployee(filteredTasks),
+    [filteredTasks],
+  );
 
   const dayRange = useMemo(
     () => getDayRange(timelineStartDate, timelineDays),
@@ -53,7 +78,10 @@ export const ResourceTimeline = ({
     <div className="resource-timeline-page">
       <header>
         <h1>Vista Recursos (MVP)</h1>
-        <p>Visualización por departamento y empleado para saber quién está haciendo qué y cuándo.</p>
+        <p>
+          Visualización por departamento y empleado para saber quién está
+          haciendo qué y cuándo.
+        </p>
       </header>
 
       <section className="filters">
@@ -74,19 +102,38 @@ export const ResourceTimeline = ({
         <label>
           Empleado
           <input
-            placeholder="Buscar por nombre"
+            placeholder="Buscar por nombre, tarea o descripción"
             value={employeeQuery}
             onChange={(event) => setEmployeeQuery(event.target.value)}
           />
         </label>
       </section>
 
+      <section className="project-legend" aria-label="Leyenda de proyectos">
+        {projectLegend.map((project) => (
+          <span key={project.projectId} className="legend-item">
+            <i
+              style={{ backgroundColor: project.projectColor }}
+              aria-hidden="true"
+            />
+            {project.projectName}
+          </span>
+        ))}
+      </section>
+
       <div className="timeline-shell">
         <div className="timeline-header">
           <div className="employee-label header">Departamento / Empleado</div>
-          <div className="timeline-days" style={{ width: DAY_WIDTH * timelineDays }}>
+          <div
+            className="timeline-days"
+            style={{ width: DAY_WIDTH * timelineDays }}
+          >
             {dayRange.map((day, index) => (
-              <div key={index} className="day-header" style={{ width: DAY_WIDTH }}>
+              <div
+                key={index}
+                className="day-header"
+                style={{ width: DAY_WIDTH }}
+              >
                 <strong>{getWeekLabel(day)}</strong>
                 <span>{formatDayLabel(day)}</span>
               </div>
@@ -111,7 +158,11 @@ export const ResourceTimeline = ({
         )}
       </div>
 
-      <TaskDetailsModal task={selectedTask} taskTitleById={taskTitleById} onClose={() => setSelectedTask(null)} />
+      <TaskDetailsModal
+        task={selectedTask}
+        taskTitleById={taskTitleById}
+        onClose={() => setSelectedTask(null)}
+      />
     </div>
   );
 };
