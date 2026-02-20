@@ -1,325 +1,856 @@
-diff --git a/src/components/ResourceTimeline.tsx b/src/components/ResourceTimeline.tsx
-index 69ef02478ddcb201f9c4da78ef25eade6b403ac3..fc8647caba84355f9c9aaa810441054f76385312 100644
---- a/src/components/ResourceTimeline.tsx
-+++ b/src/components/ResourceTimeline.tsx
-@@ -1,46 +1,50 @@
- import { useMemo, useState } from "react";
- import type { WorkPackage } from "../types/workPackage";
- import {
-   formatDayLabel,
-   formatDayMonth,
-   getDayRange,
-   getWeekHeaderGroups,
-   getWeekLabel,
- } from "../utils/dateUtils";
- import { includesNormalized } from "../utils/textUtils";
- import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
- import { DepartmentSection } from "./DepartmentSection";
- import { TaskDetailsModal } from "./TaskDetailsModal";
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..a5926d87e493ec417af03b7e2bece60e4a8f726d
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,6 @@
++node_modules/
++dist/
++.env
++.env.*
++!.env.example
++.DS_Store
+diff --git a/README.md b/README.md
+index 8ae9f5d160ebef10750c24df8f5793cf18d98ac9..a9d37c49d0db5c9f8e5defa33d1ffa3be496a67e 100644
+--- a/README.md
++++ b/README.md
+@@ -1,42 +1,97 @@
+ # Resource Timeline MVP
  
- interface ResourceTimelineProps {
-   tasks: WorkPackage[];
-   timelineStartDate: string;
-   timelineDays?: number;
- }
+ MVP para visualizar paquetes de trabajo por **departamento** y **empleado** en una línea de tiempo (4 semanas, día a día).
  
- const DAY_WIDTH = 42;
-+const WEEK_RANGE_MIN_WIDTH = 150;
+ ## Stack
+ 
+ - React + Vite + TypeScript
+-- Sin backend (mock data local)
++- API serverless en `api/` (compatible con Vercel Functions)
++- Datos seed/fixtures en memoria (para demo del MVP)
+ 
+ ## Funcionalidades incluidas
+ 
+ - Vista principal "Recursos" con:
+   - Eje vertical: Departamentos -> empleados.
+   - Eje horizontal: 28 días (4 semanas) desde una fecha de demo.
+ - Bloques de tareas por empleado usando:
+   - `scheduledStartDate` como inicio visual.
+   - `durationDays` para ancho del bloque.
+ - Modal de detalle al seleccionar una tarea con:
+   - título, descripción, proyecto, fechas y dependencias.
+   - `deadlineDate` destacado visualmente.
+ - Filtros mínimos:
+   - por departamento.
+   - por nombre de empleado (buscador).
+ 
++## API MVP “Vista Recursos” (Paso 1 + Paso 2)
 +
-+const getCompactDayLabel = (day: Date): string =>
-+  day.toLocaleDateString("es-ES", { day: "2-digit" });
- 
- export const ResourceTimeline = ({
-   tasks,
-   timelineStartDate,
-   timelineDays = 28,
- }: ResourceTimelineProps) => {
-   const [selectedTask, setSelectedTask] = useState<WorkPackage | null>(null);
-   const [selectedDepartment, setSelectedDepartment] = useState<string>("Todos");
-   const [employeeQuery, setEmployeeQuery] = useState<string>("");
- 
-   const departments = useMemo(
-     () => ["Todos", ...new Set(tasks.map((task) => task.department))],
-     [tasks],
-   );
- 
-   const projectLegend = useMemo(() => {
-     const projects = new Map<
-       string,
-       { projectName: string; projectColor: string }
-     >();
-     tasks.forEach((task) => {
-       projects.set(task.projectId, {
-         projectName: task.projectName,
-         projectColor: task.projectColor,
-       });
-@@ -119,73 +123,81 @@ export const ResourceTimeline = ({
-           />
-         </label>
-       </section>
- 
-       <section className="project-legend" aria-label="Leyenda de proyectos">
-         {projectLegend.map((project) => (
-           <span key={project.projectId} className="legend-item">
-             <i
-               style={{ backgroundColor: project.projectColor }}
-               aria-hidden="true"
-             />
-             {project.projectName}
-           </span>
-         ))}
-       </section>
- 
-       <div className="timeline-shell">
-         <div className="timeline-header">
-           <div className="employee-label header">Departamento / Empleado</div>
- 
-           <div
-             className="timeline-days"
-             style={{ width: DAY_WIDTH * timelineDays }}
-           >
-             <div className="week-header-row">
--              {weekHeaderGroups.map((weekGroup) => (
--                <div
--                  key={weekGroup.key}
--                  className="week-header"
--                  style={{ width: DAY_WIDTH * weekGroup.visibleDays }}
--                >
--                  <strong>{getWeekLabel(weekGroup.weekStart)}</strong>
--                  <span>
--                    ({formatDayMonth(weekGroup.weekStart)} -{" "}
--                    {formatDayMonth(weekGroup.weekEnd)})
--                  </span>
--                </div>
--              ))}
-+              {weekHeaderGroups.map((weekGroup) => {
-+                const weekWidth = DAY_WIDTH * weekGroup.visibleDays;
-+                const showWeekRange = weekWidth >= WEEK_RANGE_MIN_WIDTH;
++Se implementó el modelo de datos normalizado + CRUD mínimo con validaciones en rutas `api/`:
 +
-+                return (
-+                  <div
-+                    key={weekGroup.key}
-+                    className="week-header"
-+                    style={{ width: weekWidth }}
-+                  >
-+                    <strong className="week-label">{getWeekLabel(weekGroup.weekStart)}</strong>
-+                    {showWeekRange ? (
-+                      <span className="week-range">
-+                        ({formatDayMonth(weekGroup.weekStart)} -{" "}
-+                        {formatDayMonth(weekGroup.weekEnd)})
-+                      </span>
-+                    ) : null}
-+                  </div>
-+                );
-+              })}
-             </div>
- 
-             <div className="day-header-row">
-               {dayRange.map((day, index) => (
-                 <div
-                   key={index}
-                   className="day-header"
-                   style={{ width: DAY_WIDTH }}
-                 >
--                  <span>{formatDayLabel(day)}</span>
-+                  <span className="day-label day-label--default">{formatDayLabel(day)}</span>
-+                  <span className="day-label day-label--compact">{getCompactDayLabel(day)}</span>
-                 </div>
-               ))}
-             </div>
-           </div>
-         </div>
- 
-         {groupedData.length === 0 ? (
-           <p className="empty-state">No hay tareas con los filtros actuales.</p>
-         ) : (
-           groupedData.map((department) => (
-             <DepartmentSection
-               key={department.department}
-               department={department.department}
-               employees={department.employees}
-               timelineStartDate={timelineStartDate}
-               timelineDays={timelineDays}
-               dayWidth={DAY_WIDTH}
-               onTaskSelect={setSelectedTask}
-             />
-           ))
-         )}
-       </div>
- 
-       <TaskDetailsModal
-         task={selectedTask}
-diff --git a/src/styles.css b/src/styles.css
-index 3dc623ad4cca3dfc4cdb2d7ed3b3520eaa05f6fa..88a8d2b2da1ee9c616003b59fa8695382204f0f8 100644
---- a/src/styles.css
-+++ b/src/styles.css
-@@ -67,91 +67,119 @@ header p {
- .legend-item {
-   display: inline-flex;
-   align-items: center;
-   gap: 0.45rem;
-   font-size: 0.88rem;
-   color: #334155;
- }
- 
- .legend-item i,
- .project-chip i {
-   width: 12px;
-   height: 12px;
-   border-radius: 50%;
-   display: inline-block;
- }
- 
- .timeline-shell {
-   background: #fff;
-   border: 1px solid #e2e8f0;
-   border-radius: 12px;
-   overflow: auto;
-   max-height: calc(100vh - 260px);
- }
- 
- .timeline-header {
--  display: flex;
-+  display: inline-flex;
-+  min-width: max-content;
-   position: sticky;
-   top: 0;
-   z-index: 4;
-   background: #f1f5f9;
-   border-bottom: 1px solid #cbd5e1;
- }
- 
- .timeline-days {
-   display: flex;
-   flex-direction: column;
- }
- 
- .week-header-row,
- .day-header-row {
-   display: flex;
- }
- 
- .week-header {
-   border-left: 1px solid #cbd5e1;
-   padding: 0.35rem 0.25rem;
-   min-height: var(--timeline-header-week-height);
-   font-size: 0.7rem;
-   display: flex;
-   gap: 0.25rem;
-   align-items: center;
-+  min-width: 0;
-+  overflow: hidden;
-+}
++- `/api/departments`
++- `/api/employees`
++- `/api/projects`
++- `/api/tasks`
++- `/api/task-assignments`
++- `/api/time-off`
 +
-+.week-label,
-+.week-range {
-+  display: block;
-+  min-width: 0;
-+  overflow: hidden;
-+  text-overflow: ellipsis;
-   white-space: nowrap;
- }
- 
- .week-header strong {
-   font-size: 0.72rem;
-+  flex: 0 1 auto;
-+}
++Cada colección soporta:
 +
-+.week-range {
-+  flex: 1 1 auto;
- }
- 
- .day-header {
-   border-left: 1px solid #cbd5e1;
-   padding: 0.35rem 0.2rem;
-   font-size: 0.7rem;
-   min-height: var(--timeline-header-day-height);
-   display: flex;
--  flex-direction: column;
-   justify-content: center;
-+  min-width: 0;
-+}
++- `GET /api/<resource>`
++- `POST /api/<resource>`
++- `GET /api/<resource>/:id`
++- `PATCH /api/<resource>/:id`
++- `DELETE /api/<resource>/:id`
 +
-+.day-label {
-+  display: none;
-+  width: 100%;
-+  white-space: nowrap;
-+  overflow: hidden;
-+  text-overflow: ellipsis;
-+}
++### Reglas de validación implementadas
 +
-+.day-label--default {
-+  display: block;
- }
++- `endDate >= startDate` para Task y TimeOff.
++- `Department.name` único.
++- `Project.name` único.
++- FKs válidas en Employee, Task, TaskAssignment y TimeOff.
++- `allocationHours >= 0`, `estimatedHours >= 0`.
++- `status` y `type` restringidos a enums válidos.
++- `TaskAssignment (taskId, employeeId)` único.
++- Soft delete en Department/Employee/Project (`isActive=false`).
++- `Task DELETE` devuelve `409` si tiene asignaciones relacionadas.
++
++### POSTERGADO (no Vercel-only)
++
++- Persistencia relacional real con Postgres/ORM y migraciones automáticas de deploy (`prisma migrate deploy`).
++- Estado actual de esta iteración: se usa almacenamiento en memoria para demo y validación funcional del flujo CRUD en serverless.
++
++## Variables de entorno
++
++No son obligatorias para esta iteración (almacenamiento en memoria).
++
++Para un siguiente paso con persistencia en Vercel se recomienda:
++
++- `DATABASE_URL` (Vercel Postgres / Neon / Supabase)
++
+ ## Estructura principal
  
- .day-header strong {
-   font-size: 0.72rem;
- }
- 
- .employee-label {
-   min-width: 220px;
-   border-right: 1px solid #cbd5e1;
-   padding: 0.65rem;
-   display: flex;
-   align-items: center;
-   justify-content: flex-start;
-   background: #fcfdff;
- 
-   min-height: var(--timeline-row-height);
-   margin: 0;
-   line-height: 1.2;
- }
- 
- .employee-label.header {
-   font-size: 0.8rem;
-   font-weight: 700;
-   text-transform: uppercase;
- }
-@@ -253,34 +281,46 @@ header p {
- }
- 
- .modal-panel dd {
-   margin: 0;
- }
- 
- .project-chip {
-   display: inline-flex;
-   align-items: center;
-   gap: 0.45rem;
- }
- 
- .deadline {
-   color: #dc2626;
- }
- 
- @media (max-width: 768px) {
-   .resource-timeline-page {
-     padding: 0.8rem;
-   }
- 
-   .timeline-shell {
-     max-height: calc(100vh - 220px);
-   }
- 
-+  .week-header {
-+    gap: 0.15rem;
+ ```txt
+ src/
+   components/
+     ResourceTimeline.tsx
+     DepartmentSection.tsx
+     EmployeeRow.tsx
+     TaskBlock.tsx
+     TaskDetailsModal.tsx
+   data/
+     mock-data.ts
+   types/
+     workPackage.ts
+   utils/
+     dateUtils.ts
+     timelineUtils.ts
++api/
++  departments/
++  employees/
++  projects/
++  tasks/
++  task-assignments/
++  time-off/
++lib/
++  api.js
++  store.js
+ ```
+diff --git a/api/departments/[id].js b/api/departments/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a80f281471d591679ed05d70838c1938fe6348bd
+--- /dev/null
++++ b/api/departments/[id].js
+@@ -0,0 +1,49 @@
++import { getStore } from '../../lib/store.js';
++import { parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const recordId = parseId(req);
++  const department = store.departments.find((item) => item.id === recordId);
++
++  if (!department) {
++    return res.status(404).json({ error: 'Department not found.' });
 +  }
 +
-+  .day-label--default {
-+    display: none;
++  if (req.method === 'GET') {
++    return res.status(200).json(department);
 +  }
 +
-+  .day-label--compact {
-+    display: block;
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.name !== undefined) {
++      if (typeof body.name !== 'string' || !body.name.trim()) {
++        return res.status(400).json({ error: 'name must be a non-empty string.' });
++      }
++
++      const duplicate = store.departments.some(
++        (item) => item.id !== recordId && item.name.toLowerCase() === body.name.trim().toLowerCase(),
++      );
++      if (duplicate) {
++        return res.status(409).json({ error: 'Department.name must be unique.' });
++      }
++
++      department.name = body.name.trim();
++    }
++
++    if (typeof body.isActive === 'boolean') {
++      department.isActive = body.isActive;
++    }
++
++    return res.status(200).json(department);
 +  }
 +
-   .modal-panel {
-     width: 100vw;
-   }
- 
-   .modal-panel dl {
-     grid-template-columns: 1fr;
-     gap: 0.25rem;
-   }
- }
-
++  if (req.method === 'DELETE') {
++    department.isActive = false;
++    return res.status(200).json(department);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/departments/index.js b/api/departments/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6782d1a3c84d6c2a12f1cbfdf08c59a4fffaaa69
+--- /dev/null
++++ b/api/departments/index.js
+@@ -0,0 +1,28 @@
++import { getStore, id } from '../../lib/store.js';
++import { parseBody, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.departments);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++    if (!body || typeof body.name !== 'string' || !body.name.trim()) {
++      return res.status(400).json({ error: 'name is required.' });
++    }
++
++    const name = body.name.trim();
++    if (store.departments.some((department) => department.name.toLowerCase() === name.toLowerCase())) {
++      return res.status(409).json({ error: 'Department.name must be unique.' });
++    }
++
++    const department = { id: id('dep', store), name, isActive: true };
++    store.departments.push(department);
++    return res.status(201).json(department);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/api/employees/[id].js b/api/employees/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae73711b24ac704a49992988f5bb53de18780a89
+--- /dev/null
++++ b/api/employees/[id].js
+@@ -0,0 +1,49 @@
++import { getStore } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const employee = store.employees.find((item) => item.id === parseId(req));
++
++  if (!employee) {
++    return res.status(404).json({ error: 'Employee not found.' });
++  }
++
++  if (req.method === 'GET') {
++    return res.status(200).json(employee);
++  }
++
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.departmentId !== undefined && !store.departments.some((department) => department.id === body.departmentId)) {
++      return res.status(400).json({ error: 'Employee.departmentId must exist.' });
++    }
++
++    if (body.capacityHoursPerWeek !== undefined && !isNonNegativeNumber(body.capacityHoursPerWeek)) {
++      return res.status(400).json({ error: 'capacityHoursPerWeek must be >= 0.' });
++    }
++
++    if (body.costPerHour !== undefined && !isNonNegativeNumber(body.costPerHour)) {
++      return res.status(400).json({ error: 'costPerHour must be >= 0.' });
++    }
++
++    Object.assign(employee, {
++      ...(body.fullName !== undefined ? { fullName: body.fullName.trim() } : {}),
++      ...(body.departmentId !== undefined ? { departmentId: body.departmentId } : {}),
++      ...(body.capacityHoursPerWeek !== undefined ? { capacityHoursPerWeek: body.capacityHoursPerWeek } : {}),
++      ...(body.costPerHour !== undefined ? { costPerHour: body.costPerHour } : {}),
++      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
++    });
++
++    return res.status(200).json(employee);
++  }
++
++  if (req.method === 'DELETE') {
++    employee.isActive = false;
++    return res.status(200).json(employee);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/employees/index.js b/api/employees/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd81e31fb2f262c25d9a65b0065328cef647ed3e
+--- /dev/null
++++ b/api/employees/index.js
+@@ -0,0 +1,43 @@
++import { getStore, id } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.employees);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++    if (!body || typeof body.fullName !== 'string' || !body.fullName.trim() || typeof body.departmentId !== 'string') {
++      return res.status(400).json({ error: 'fullName and departmentId are required.' });
++    }
++
++    if (!store.departments.some((department) => department.id === body.departmentId)) {
++      return res.status(400).json({ error: 'Employee.departmentId must exist.' });
++    }
++
++    if (body.capacityHoursPerWeek !== undefined && !isNonNegativeNumber(body.capacityHoursPerWeek)) {
++      return res.status(400).json({ error: 'capacityHoursPerWeek must be >= 0.' });
++    }
++
++    if (body.costPerHour !== undefined && !isNonNegativeNumber(body.costPerHour)) {
++      return res.status(400).json({ error: 'costPerHour must be >= 0.' });
++    }
++
++    const employee = {
++      id: id('emp', store),
++      fullName: body.fullName.trim(),
++      departmentId: body.departmentId,
++      capacityHoursPerWeek: body.capacityHoursPerWeek ?? 40,
++      costPerHour: body.costPerHour ?? null,
++      isActive: true,
++    };
++
++    store.employees.push(employee);
++    return res.status(201).json(employee);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/api/projects/[id].js b/api/projects/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..617ea0dcf3a9611414a058e60308d625058f2bfa
+--- /dev/null
++++ b/api/projects/[id].js
+@@ -0,0 +1,51 @@
++import { getStore } from '../../lib/store.js';
++import { parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
++
++const hexColorRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const project = store.projects.find((item) => item.id === parseId(req));
++
++  if (!project) {
++    return res.status(404).json({ error: 'Project not found.' });
++  }
++
++  if (req.method === 'GET') {
++    return res.status(200).json(project);
++  }
++
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.name !== undefined) {
++      if (typeof body.name !== 'string' || !body.name.trim()) {
++        return res.status(400).json({ error: 'name must be a non-empty string.' });
++      }
++      const duplicate = store.projects.some((item) => item.id !== project.id && item.name.toLowerCase() === body.name.trim().toLowerCase());
++      if (duplicate) {
++        return res.status(409).json({ error: 'Project.name must be unique.' });
++      }
++      project.name = body.name.trim();
++    }
++
++    if (body.color !== undefined && (typeof body.color !== 'string' || !hexColorRegex.test(body.color))) {
++      return res.status(400).json({ error: 'color must be a valid hex code.' });
++    }
++
++    Object.assign(project, {
++      ...(body.color !== undefined ? { color: body.color } : {}),
++      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
++    });
++
++    return res.status(200).json(project);
++  }
++
++  if (req.method === 'DELETE') {
++    project.isActive = false;
++    return res.status(200).json(project);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/projects/index.js b/api/projects/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9691077c5d925af414e43e91da259a28e20916e0
+--- /dev/null
++++ b/api/projects/index.js
+@@ -0,0 +1,34 @@
++import { getStore, id } from '../../lib/store.js';
++import { parseBody, sendMethodNotAllowed } from '../../lib/api.js';
++
++const hexColorRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.projects);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++    if (!body || typeof body.name !== 'string' || !body.name.trim()) {
++      return res.status(400).json({ error: 'name is required.' });
++    }
++
++    const name = body.name.trim();
++    if (store.projects.some((project) => project.name.toLowerCase() === name.toLowerCase())) {
++      return res.status(409).json({ error: 'Project.name must be unique.' });
++    }
++
++    if (body.color !== undefined && (typeof body.color !== 'string' || !hexColorRegex.test(body.color))) {
++      return res.status(400).json({ error: 'color must be a valid hex code.' });
++    }
++
++    const project = { id: id('pro', store), name, color: body.color ?? null, isActive: true };
++    store.projects.push(project);
++    return res.status(201).json(project);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/api/task-assignments/[id].js b/api/task-assignments/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..960ad92ea374c2d1a7df07ab1c803aa996342a5a
+--- /dev/null
++++ b/api/task-assignments/[id].js
+@@ -0,0 +1,46 @@
++import { getStore } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const assignment = store.taskAssignments.find((item) => item.id === parseId(req));
++
++  if (!assignment) {
++    return res.status(404).json({ error: 'TaskAssignment not found.' });
++  }
++
++  if (req.method === 'GET') {
++    return res.status(200).json(assignment);
++  }
++
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.allocationHours !== undefined && !isNonNegativeNumber(body.allocationHours)) {
++      return res.status(400).json({ error: 'allocationHours must be >= 0.' });
++    }
++
++    const nextTaskId = body.taskId ?? assignment.taskId;
++    const nextEmployeeId = body.employeeId ?? assignment.employeeId;
++
++    if (store.taskAssignments.some((item) => item.id !== assignment.id && item.taskId === nextTaskId && item.employeeId === nextEmployeeId)) {
++      return res.status(409).json({ error: 'TaskAssignment (taskId, employeeId) must be unique.' });
++    }
++
++    Object.assign(assignment, {
++      ...(body.taskId !== undefined ? { taskId: body.taskId } : {}),
++      ...(body.employeeId !== undefined ? { employeeId: body.employeeId } : {}),
++      ...(body.allocationHours !== undefined ? { allocationHours: body.allocationHours } : {}),
++    });
++
++    return res.status(200).json(assignment);
++  }
++
++  if (req.method === 'DELETE') {
++    store.taskAssignments = store.taskAssignments.filter((item) => item.id !== assignment.id);
++    return res.status(204).end();
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/task-assignments/index.js b/api/task-assignments/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..320625c0119cb695b46f3b07debf87ad7bdad74d
+--- /dev/null
++++ b/api/task-assignments/index.js
+@@ -0,0 +1,40 @@
++import { getStore, id } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, sendMethodNotAllowed } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.taskAssignments);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++    if (!body || typeof body.taskId !== 'string' || typeof body.employeeId !== 'string') {
++      return res.status(400).json({ error: 'taskId and employeeId are required.' });
++    }
++
++    if (!store.tasks.some((task) => task.id === body.taskId)) {
++      return res.status(400).json({ error: 'taskId must exist.' });
++    }
++
++    if (!store.employees.some((employee) => employee.id === body.employeeId)) {
++      return res.status(400).json({ error: 'employeeId must exist.' });
++    }
++
++    if (!isNonNegativeNumber(body.allocationHours)) {
++      return res.status(400).json({ error: 'allocationHours must be >= 0.' });
++    }
++
++    if (store.taskAssignments.some((item) => item.taskId === body.taskId && item.employeeId === body.employeeId)) {
++      return res.status(409).json({ error: 'TaskAssignment (taskId, employeeId) must be unique.' });
++    }
++
++    const assignment = { id: id('asg', store), taskId: body.taskId, employeeId: body.employeeId, allocationHours: body.allocationHours };
++    store.taskAssignments.push(assignment);
++
++    return res.status(201).json(assignment);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/api/tasks/[id].js b/api/tasks/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e93c5421266ecb928b6d117935b0fec407a0ee6b
+--- /dev/null
++++ b/api/tasks/[id].js
+@@ -0,0 +1,67 @@
++import { getStore, taskStatuses } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const task = store.tasks.find((item) => item.id === parseId(req));
++
++  if (!task) {
++    return res.status(404).json({ error: 'Task not found.' });
++  }
++
++  if (req.method === 'GET') {
++    return res.status(200).json(task);
++  }
++
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.projectId !== undefined && !store.projects.some((project) => project.id === body.projectId)) {
++      return res.status(400).json({ error: 'Task.projectId must exist.' });
++    }
++
++    if (body.departmentId !== undefined && !store.departments.some((department) => department.id === body.departmentId)) {
++      return res.status(400).json({ error: 'Task.departmentId must exist.' });
++    }
++
++    if (body.estimatedHours !== undefined && !isNonNegativeNumber(body.estimatedHours)) {
++      return res.status(400).json({ error: 'estimatedHours must be >= 0.' });
++    }
++
++    if (body.status !== undefined && !taskStatuses.includes(body.status)) {
++      return res.status(400).json({ error: 'status must be a valid enum value.' });
++    }
++
++    const startDate = body.startDate ?? task.startDate;
++    const endDate = body.endDate ?? task.endDate;
++    const dateCheck = validateDateRange(startDate, endDate);
++    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
++
++    Object.assign(task, {
++      ...(body.title !== undefined ? { title: body.title.trim() } : {}),
++      ...(body.description !== undefined ? { description: body.description } : {}),
++      ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
++      ...(body.departmentId !== undefined ? { departmentId: body.departmentId } : {}),
++      ...(body.estimatedHours !== undefined ? { estimatedHours: body.estimatedHours } : {}),
++      ...(body.status !== undefined ? { status: body.status } : {}),
++      ...(body.priority !== undefined ? { priority: body.priority } : {}),
++      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
++      startDate: dateCheck.start,
++      endDate: dateCheck.end,
++    });
++
++    return res.status(200).json(task);
++  }
++
++  if (req.method === 'DELETE') {
++    if (store.taskAssignments.some((assignment) => assignment.taskId === task.id)) {
++      return res.status(409).json({ error: 'Task cannot be deleted because it has assignments.' });
++    }
++
++    store.tasks = store.tasks.filter((item) => item.id !== task.id);
++    return res.status(204).end();
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/tasks/index.js b/api/tasks/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b1ba5cd2bbb87137dfd118e7fd4e0fb8ccdf7357
+--- /dev/null
++++ b/api/tasks/index.js
+@@ -0,0 +1,59 @@
++import { getStore, id, taskStatuses } from '../../lib/store.js';
++import { isNonNegativeNumber, parseBody, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.tasks);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++    if (!body || typeof body.title !== 'string' || !body.title.trim()) {
++      return res.status(400).json({ error: 'title is required.' });
++    }
++
++    if (!store.projects.some((project) => project.id === body.projectId)) {
++      return res.status(400).json({ error: 'Task.projectId must exist.' });
++    }
++
++    if (!store.departments.some((department) => department.id === body.departmentId)) {
++      return res.status(400).json({ error: 'Task.departmentId must exist.' });
++    }
++
++    const dateCheck = validateDateRange(body.startDate, body.endDate);
++    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
++
++    if (!isNonNegativeNumber(body.estimatedHours ?? 0)) {
++      return res.status(400).json({ error: 'estimatedHours must be >= 0.' });
++    }
++
++    if (body.status !== undefined && !taskStatuses.includes(body.status)) {
++      return res.status(400).json({ error: 'status must be a valid enum value.' });
++    }
++
++    if (body.priority !== undefined && (!Number.isInteger(body.priority) || body.priority < 1 || body.priority > 5)) {
++      return res.status(400).json({ error: 'priority must be between 1 and 5.' });
++    }
++
++    const task = {
++      id: id('tsk', store),
++      title: body.title.trim(),
++      description: body.description ?? null,
++      projectId: body.projectId,
++      departmentId: body.departmentId,
++      startDate: dateCheck.start,
++      endDate: dateCheck.end,
++      estimatedHours: body.estimatedHours ?? 0,
++      status: body.status ?? 'PLANNED',
++      priority: body.priority ?? null,
++      isActive: true,
++    };
++
++    store.tasks.push(task);
++    return res.status(201).json(task);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/api/time-off/[id].js b/api/time-off/[id].js
+new file mode 100644
+index 0000000000000000000000000000000000000000..84fcb509837faccf6110544e2c47bc742506c056
+--- /dev/null
++++ b/api/time-off/[id].js
+@@ -0,0 +1,44 @@
++import { getStore, timeOffTypes } from '../../lib/store.js';
++import { parseBody, parseId, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++  const entry = store.timeOff.find((item) => item.id === parseId(req));
++
++  if (!entry) {
++    return res.status(404).json({ error: 'TimeOff not found.' });
++  }
++
++  if (req.method === 'GET') {
++    return res.status(200).json(entry);
++  }
++
++  if (req.method === 'PATCH') {
++    const body = parseBody(req);
++    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++
++    if (body.type !== undefined && !timeOffTypes.includes(body.type)) {
++      return res.status(400).json({ error: 'type must be a valid enum value.' });
++    }
++
++    const dateCheck = validateDateRange(body.startDate ?? entry.startDate, body.endDate ?? entry.endDate);
++    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
++
++    Object.assign(entry, {
++      ...(body.employeeId !== undefined ? { employeeId: body.employeeId } : {}),
++      ...(body.type !== undefined ? { type: body.type } : {}),
++      ...(body.notes !== undefined ? { notes: body.notes } : {}),
++      startDate: dateCheck.start,
++      endDate: dateCheck.end,
++    });
++
++    return res.status(200).json(entry);
++  }
++
++  if (req.method === 'DELETE') {
++    store.timeOff = store.timeOff.filter((item) => item.id !== entry.id);
++    return res.status(204).end();
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++}
+diff --git a/api/time-off/index.js b/api/time-off/index.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d4f38419a653e83d59a8e565c2be347078d1b542
+--- /dev/null
++++ b/api/time-off/index.js
+@@ -0,0 +1,43 @@
++import { getStore, id, timeOffTypes } from '../../lib/store.js';
++import { parseBody, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
++
++export default async function handler(req, res) {
++  const store = getStore();
++
++  if (req.method === 'GET') {
++    return res.status(200).json(store.timeOff);
++  }
++
++  if (req.method === 'POST') {
++    const body = parseBody(req);
++
++    if (!body || typeof body.employeeId !== 'string') {
++      return res.status(400).json({ error: 'employeeId is required.' });
++    }
++
++    if (!store.employees.some((employee) => employee.id === body.employeeId)) {
++      return res.status(400).json({ error: 'employeeId must exist.' });
++    }
++
++    if (!timeOffTypes.includes(body.type)) {
++      return res.status(400).json({ error: 'type must be a valid enum value.' });
++    }
++
++    const dateCheck = validateDateRange(body.startDate, body.endDate);
++    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
++
++    const entry = {
++      id: id('to', store),
++      employeeId: body.employeeId,
++      startDate: dateCheck.start,
++      endDate: dateCheck.end,
++      type: body.type,
++      notes: body.notes ?? null,
++    };
++    store.timeOff.push(entry);
++
++    return res.status(201).json(entry);
++  }
++
++  return sendMethodNotAllowed(res, ['GET', 'POST']);
++}
+diff --git a/lib/api.js b/lib/api.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9688f3533df54241b2a7f8e3eb2f3c81b0d4860
+--- /dev/null
++++ b/lib/api.js
+@@ -0,0 +1,42 @@
++export function sendMethodNotAllowed(res, allowedMethods) {
++  res.setHeader('Allow', allowedMethods);
++  return res.status(405).json({ error: `Method not allowed. Use: ${allowedMethods.join(', ')}` });
++}
++
++export function parseId(req) {
++  return req.query.id;
++}
++
++export function parseBody(req) {
++  if (typeof req.body === 'string') {
++    try {
++      return JSON.parse(req.body);
++    } catch {
++      return null;
++    }
++  }
++  return req.body;
++}
++
++export function isNonNegativeNumber(value) {
++  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
++}
++
++export function validateDateRange(startDate, endDate) {
++  const start = new Date(startDate);
++  const end = new Date(endDate);
++
++  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
++    return { ok: false, error: 'startDate and endDate must be valid ISO dates.' };
++  }
++
++  if (end < start) {
++    return { ok: false, error: 'endDate must be greater than or equal to startDate.' };
++  }
++
++  return { ok: true, start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
++}
++
++export function conflict(res, message) {
++  return res.status(409).json({ error: message });
++}
+diff --git a/lib/store.js b/lib/store.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..49258110a44c6bafb0bae6b8a76c4e3c321a1073
+--- /dev/null
++++ b/lib/store.js
+@@ -0,0 +1,62 @@
++const taskStatuses = ['PLANNED', 'IN_PROGRESS', 'DONE', 'BLOCKED'];
++const timeOffTypes = ['VACATION', 'SICK', 'OTHER'];
++
++function createSeed() {
++  const departments = [
++    { id: 'dep_eng', name: 'Engineering', isActive: true },
++    { id: 'dep_des', name: 'Design', isActive: true },
++  ];
++
++  const employees = [
++    { id: 'emp_alice', fullName: 'Alice Rivera', departmentId: 'dep_eng', capacityHoursPerWeek: 40, costPerHour: 65, isActive: true },
++    { id: 'emp_bob', fullName: 'Bob Martín', departmentId: 'dep_eng', capacityHoursPerWeek: 35, costPerHour: null, isActive: true },
++    { id: 'emp_carla', fullName: 'Carla Soto', departmentId: 'dep_des', capacityHoursPerWeek: 40, costPerHour: null, isActive: true },
++  ];
++
++  const projects = [{ id: 'pro_web', name: 'Website Revamp', color: '#3B82F6', isActive: true }];
++
++  const tasks = [{
++    id: 'tsk_onboarding',
++    title: 'Implement onboarding flow',
++    description: 'Crear onboarding inicial para usuarios nuevos.',
++    projectId: 'pro_web',
++    departmentId: 'dep_eng',
++    startDate: '2026-02-16',
++    endDate: '2026-02-27',
++    estimatedHours: 80,
++    status: 'IN_PROGRESS',
++    priority: 2,
++    isActive: true,
++  }];
++
++  const taskAssignments = [
++    { id: 'asg_alice_onboarding', taskId: 'tsk_onboarding', employeeId: 'emp_alice', allocationHours: 30 },
++    { id: 'asg_bob_onboarding', taskId: 'tsk_onboarding', employeeId: 'emp_bob', allocationHours: 20 },
++  ];
++
++  const timeOff = [{
++    id: 'to_carla_1',
++    employeeId: 'emp_carla',
++    startDate: '2026-02-24',
++    endDate: '2026-02-26',
++    type: 'VACATION',
++    notes: 'Vacaciones planificadas',
++  }];
++
++  return { departments, employees, projects, tasks, taskAssignments, timeOff, nextId: 1 };
++}
++
++function id(prefix, state) {
++  const value = `${prefix}_${state.nextId}`;
++  state.nextId += 1;
++  return value;
++}
++
++export function getStore() {
++  if (!globalThis.__resourceStore) {
++    globalThis.__resourceStore = createSeed();
++  }
++  return globalThis.__resourceStore;
++}
++
++export { id, taskStatuses, timeOffTypes };
