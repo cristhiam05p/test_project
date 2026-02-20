@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import type { WorkPackage } from "../types/workPackage";
-import { formatDayLabel, getDayRange, getWeekLabel } from "../utils/dateUtils";
+import {
+  formatDayLabel,
+  formatDayMonth,
+  getDayRange,
+  getWeekHeaderGroups,
+  getWeekLabel,
+} from "../utils/dateUtils";
 import { includesNormalized } from "../utils/textUtils";
 import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
 import { DepartmentSection } from "./DepartmentSection";
@@ -70,6 +76,11 @@ export const ResourceTimeline = ({
     [timelineDays, timelineStartDate],
   );
 
+  const weekHeaderGroups = useMemo(
+    () => getWeekHeaderGroups(dayRange),
+    [dayRange],
+  );
+
   const taskTitleById = useMemo(() => {
     return new Map(tasks.map((task) => [task.id, task.title]));
   }, [tasks]);
@@ -124,20 +135,38 @@ export const ResourceTimeline = ({
       <div className="timeline-shell">
         <div className="timeline-header">
           <div className="employee-label header">Departamento / Empleado</div>
+
           <div
             className="timeline-days"
             style={{ width: DAY_WIDTH * timelineDays }}
           >
-            {dayRange.map((day, index) => (
-              <div
-                key={index}
-                className="day-header"
-                style={{ width: DAY_WIDTH }}
-              >
-                <strong>{getWeekLabel(day)}</strong>
-                <span>{formatDayLabel(day)}</span>
-              </div>
-            ))}
+            <div className="week-header-row">
+              {weekHeaderGroups.map((weekGroup) => (
+                <div
+                  key={weekGroup.key}
+                  className="week-header"
+                  style={{ width: DAY_WIDTH * weekGroup.visibleDays }}
+                >
+                  <strong>{getWeekLabel(weekGroup.weekStart)}</strong>
+                  <span>
+                    ({formatDayMonth(weekGroup.weekStart)} -{" "}
+                    {formatDayMonth(weekGroup.weekEnd)})
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="day-header-row">
+              {dayRange.map((day, index) => (
+                <div
+                  key={index}
+                  className="day-header"
+                  style={{ width: DAY_WIDTH }}
+                >
+                  <span>{formatDayLabel(day)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

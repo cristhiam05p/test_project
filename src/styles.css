@@ -1,4 +1,8 @@
 :root {
+  --timeline-row-height: 52px;
+  --timeline-header-week-height: 30px;
+  --timeline-header-day-height: 30px;
+
   font-family:
     system-ui,
     -apple-system,
@@ -95,13 +99,34 @@ header p {
 
 .timeline-days {
   display: flex;
+  flex-direction: column;
+}
+
+.week-header-row,
+.day-header-row {
+  display: flex;
+}
+
+.week-header {
+  border-left: 1px solid #cbd5e1;
+  padding: 0.35rem 0.25rem;
+  min-height: var(--timeline-header-week-height);
+  font-size: 0.7rem;
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.week-header strong {
+  font-size: 0.72rem;
 }
 
 .day-header {
   border-left: 1px solid #cbd5e1;
   padding: 0.35rem 0.2rem;
   font-size: 0.7rem;
-  min-height: 52px;
+  min-height: var(--timeline-header-day-height);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -119,6 +144,10 @@ header p {
   align-items: center;
   justify-content: flex-start;
   background: #fcfdff;
+
+  min-height: var(--timeline-row-height);
+  margin: 0;
+  line-height: 1.2;
 }
 
 .employee-label.header {
@@ -127,10 +156,16 @@ header p {
   text-transform: uppercase;
 }
 
+.employee-row {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--timeline-row-height);
+}
+
 .employee-timeline {
   display: flex;
   position: relative;
-  min-height: 52px;
+  min-height: var(--timeline-row-height);
 }
 
 .day-cell {

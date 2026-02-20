@@ -28,6 +28,64 @@ export const getWeekLabel = (date: Date): string => {
   return `KW ${isoWeek}`;
 };
 
+export const startOfISOWeek = (date: Date): Date => {
+  const output = new Date(date);
+  const day = output.getDay() || 7;
+  output.setDate(output.getDate() - (day - 1));
+  return output;
+};
+
+export const endOfISOWeek = (date: Date): Date => {
+  const output = startOfISOWeek(date);
+  output.setDate(output.getDate() + 6);
+  return output;
+};
+
+export const formatDayMonth = (date: Date): string => {
+  return date.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+};
+
+export interface WeekHeaderGroup {
+  key: string;
+  weekNumber: number;
+  visibleDays: number;
+  weekStart: Date;
+  weekEnd: Date;
+}
+
+export const getWeekHeaderGroups = (days: Date[]): WeekHeaderGroup[] => {
+  if (days.length === 0) {
+    return [];
+  }
+
+  const groups: WeekHeaderGroup[] = [];
+  days.forEach((day) => {
+    const weekStart = startOfISOWeek(day);
+    const weekNumber = getISOWeek(day);
+    const year = weekStart.getFullYear();
+    const key = `${year}-${weekNumber}`;
+    const currentGroup = groups[groups.length - 1];
+
+    if (!currentGroup || currentGroup.key !== key) {
+      groups.push({
+        key,
+        weekNumber,
+        visibleDays: 1,
+        weekStart,
+        weekEnd: endOfISOWeek(day),
+      });
+      return;
+    }
+
+    currentGroup.visibleDays += 1;
+  });
+
+  return groups;
+};
+
 export const getISOWeek = (date: Date): number => {
   const utcDate = new Date(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
