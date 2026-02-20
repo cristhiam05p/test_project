@@ -1,0 +1,325 @@
+diff --git a/src/components/ResourceTimeline.tsx b/src/components/ResourceTimeline.tsx
+index 69ef02478ddcb201f9c4da78ef25eade6b403ac3..fc8647caba84355f9c9aaa810441054f76385312 100644
+--- a/src/components/ResourceTimeline.tsx
++++ b/src/components/ResourceTimeline.tsx
+@@ -1,46 +1,50 @@
+ import { useMemo, useState } from "react";
+ import type { WorkPackage } from "../types/workPackage";
+ import {
+   formatDayLabel,
+   formatDayMonth,
+   getDayRange,
+   getWeekHeaderGroups,
+   getWeekLabel,
+ } from "../utils/dateUtils";
+ import { includesNormalized } from "../utils/textUtils";
+ import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
+ import { DepartmentSection } from "./DepartmentSection";
+ import { TaskDetailsModal } from "./TaskDetailsModal";
+ 
+ interface ResourceTimelineProps {
+   tasks: WorkPackage[];
+   timelineStartDate: string;
+   timelineDays?: number;
+ }
+ 
+ const DAY_WIDTH = 42;
++const WEEK_RANGE_MIN_WIDTH = 150;
++
++const getCompactDayLabel = (day: Date): string =>
++  day.toLocaleDateString("es-ES", { day: "2-digit" });
+ 
+ export const ResourceTimeline = ({
+   tasks,
+   timelineStartDate,
+   timelineDays = 28,
+ }: ResourceTimelineProps) => {
+   const [selectedTask, setSelectedTask] = useState<WorkPackage | null>(null);
+   const [selectedDepartment, setSelectedDepartment] = useState<string>("Todos");
+   const [employeeQuery, setEmployeeQuery] = useState<string>("");
+ 
+   const departments = useMemo(
+     () => ["Todos", ...new Set(tasks.map((task) => task.department))],
+     [tasks],
+   );
+ 
+   const projectLegend = useMemo(() => {
+     const projects = new Map<
+       string,
+       { projectName: string; projectColor: string }
+     >();
+     tasks.forEach((task) => {
+       projects.set(task.projectId, {
+         projectName: task.projectName,
+         projectColor: task.projectColor,
+       });
+@@ -119,73 +123,81 @@ export const ResourceTimeline = ({
+           />
+         </label>
+       </section>
+ 
+       <section className="project-legend" aria-label="Leyenda de proyectos">
+         {projectLegend.map((project) => (
+           <span key={project.projectId} className="legend-item">
+             <i
+               style={{ backgroundColor: project.projectColor }}
+               aria-hidden="true"
+             />
+             {project.projectName}
+           </span>
+         ))}
+       </section>
+ 
+       <div className="timeline-shell">
+         <div className="timeline-header">
+           <div className="employee-label header">Departamento / Empleado</div>
+ 
+           <div
+             className="timeline-days"
+             style={{ width: DAY_WIDTH * timelineDays }}
+           >
+             <div className="week-header-row">
+-              {weekHeaderGroups.map((weekGroup) => (
+-                <div
+-                  key={weekGroup.key}
+-                  className="week-header"
+-                  style={{ width: DAY_WIDTH * weekGroup.visibleDays }}
+-                >
+-                  <strong>{getWeekLabel(weekGroup.weekStart)}</strong>
+-                  <span>
+-                    ({formatDayMonth(weekGroup.weekStart)} -{" "}
+-                    {formatDayMonth(weekGroup.weekEnd)})
+-                  </span>
+-                </div>
+-              ))}
++              {weekHeaderGroups.map((weekGroup) => {
++                const weekWidth = DAY_WIDTH * weekGroup.visibleDays;
++                const showWeekRange = weekWidth >= WEEK_RANGE_MIN_WIDTH;
++
++                return (
++                  <div
++                    key={weekGroup.key}
++                    className="week-header"
++                    style={{ width: weekWidth }}
++                  >
++                    <strong className="week-label">{getWeekLabel(weekGroup.weekStart)}</strong>
++                    {showWeekRange ? (
++                      <span className="week-range">
++                        ({formatDayMonth(weekGroup.weekStart)} -{" "}
++                        {formatDayMonth(weekGroup.weekEnd)})
++                      </span>
++                    ) : null}
++                  </div>
++                );
++              })}
+             </div>
+ 
+             <div className="day-header-row">
+               {dayRange.map((day, index) => (
+                 <div
+                   key={index}
+                   className="day-header"
+                   style={{ width: DAY_WIDTH }}
+                 >
+-                  <span>{formatDayLabel(day)}</span>
++                  <span className="day-label day-label--default">{formatDayLabel(day)}</span>
++                  <span className="day-label day-label--compact">{getCompactDayLabel(day)}</span>
+                 </div>
+               ))}
+             </div>
+           </div>
+         </div>
+ 
+         {groupedData.length === 0 ? (
+           <p className="empty-state">No hay tareas con los filtros actuales.</p>
+         ) : (
+           groupedData.map((department) => (
+             <DepartmentSection
+               key={department.department}
+               department={department.department}
+               employees={department.employees}
+               timelineStartDate={timelineStartDate}
+               timelineDays={timelineDays}
+               dayWidth={DAY_WIDTH}
+               onTaskSelect={setSelectedTask}
+             />
+           ))
+         )}
+       </div>
+ 
+       <TaskDetailsModal
+         task={selectedTask}
+diff --git a/src/styles.css b/src/styles.css
+index 3dc623ad4cca3dfc4cdb2d7ed3b3520eaa05f6fa..88a8d2b2da1ee9c616003b59fa8695382204f0f8 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -67,91 +67,119 @@ header p {
+ .legend-item {
+   display: inline-flex;
+   align-items: center;
+   gap: 0.45rem;
+   font-size: 0.88rem;
+   color: #334155;
+ }
+ 
+ .legend-item i,
+ .project-chip i {
+   width: 12px;
+   height: 12px;
+   border-radius: 50%;
+   display: inline-block;
+ }
+ 
+ .timeline-shell {
+   background: #fff;
+   border: 1px solid #e2e8f0;
+   border-radius: 12px;
+   overflow: auto;
+   max-height: calc(100vh - 260px);
+ }
+ 
+ .timeline-header {
+-  display: flex;
++  display: inline-flex;
++  min-width: max-content;
+   position: sticky;
+   top: 0;
+   z-index: 4;
+   background: #f1f5f9;
+   border-bottom: 1px solid #cbd5e1;
+ }
+ 
+ .timeline-days {
+   display: flex;
+   flex-direction: column;
+ }
+ 
+ .week-header-row,
+ .day-header-row {
+   display: flex;
+ }
+ 
+ .week-header {
+   border-left: 1px solid #cbd5e1;
+   padding: 0.35rem 0.25rem;
+   min-height: var(--timeline-header-week-height);
+   font-size: 0.7rem;
+   display: flex;
+   gap: 0.25rem;
+   align-items: center;
++  min-width: 0;
++  overflow: hidden;
++}
++
++.week-label,
++.week-range {
++  display: block;
++  min-width: 0;
++  overflow: hidden;
++  text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+ 
+ .week-header strong {
+   font-size: 0.72rem;
++  flex: 0 1 auto;
++}
++
++.week-range {
++  flex: 1 1 auto;
+ }
+ 
+ .day-header {
+   border-left: 1px solid #cbd5e1;
+   padding: 0.35rem 0.2rem;
+   font-size: 0.7rem;
+   min-height: var(--timeline-header-day-height);
+   display: flex;
+-  flex-direction: column;
+   justify-content: center;
++  min-width: 0;
++}
++
++.day-label {
++  display: none;
++  width: 100%;
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++
++.day-label--default {
++  display: block;
+ }
+ 
+ .day-header strong {
+   font-size: 0.72rem;
+ }
+ 
+ .employee-label {
+   min-width: 220px;
+   border-right: 1px solid #cbd5e1;
+   padding: 0.65rem;
+   display: flex;
+   align-items: center;
+   justify-content: flex-start;
+   background: #fcfdff;
+ 
+   min-height: var(--timeline-row-height);
+   margin: 0;
+   line-height: 1.2;
+ }
+ 
+ .employee-label.header {
+   font-size: 0.8rem;
+   font-weight: 700;
+   text-transform: uppercase;
+ }
+@@ -253,34 +281,46 @@ header p {
+ }
+ 
+ .modal-panel dd {
+   margin: 0;
+ }
+ 
+ .project-chip {
+   display: inline-flex;
+   align-items: center;
+   gap: 0.45rem;
+ }
+ 
+ .deadline {
+   color: #dc2626;
+ }
+ 
+ @media (max-width: 768px) {
+   .resource-timeline-page {
+     padding: 0.8rem;
+   }
+ 
+   .timeline-shell {
+     max-height: calc(100vh - 220px);
+   }
+ 
++  .week-header {
++    gap: 0.15rem;
++  }
++
++  .day-label--default {
++    display: none;
++  }
++
++  .day-label--compact {
++    display: block;
++  }
++
+   .modal-panel {
+     width: 100vw;
+   }
+ 
+   .modal-panel dl {
+     grid-template-columns: 1fr;
+     gap: 0.25rem;
+   }
+ }
+

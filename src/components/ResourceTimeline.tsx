@@ -19,6 +19,10 @@ interface ResourceTimelineProps {
 }
 
 const DAY_WIDTH = 42;
+const WEEK_RANGE_MIN_WIDTH = 150;
+
+const getCompactDayLabel = (day: Date): string =>
+  day.toLocaleDateString("es-ES", { day: "2-digit" });
 
 export const ResourceTimeline = ({
   tasks,
@@ -141,19 +145,26 @@ export const ResourceTimeline = ({
             style={{ width: DAY_WIDTH * timelineDays }}
           >
             <div className="week-header-row">
-              {weekHeaderGroups.map((weekGroup) => (
-                <div
-                  key={weekGroup.key}
-                  className="week-header"
-                  style={{ width: DAY_WIDTH * weekGroup.visibleDays }}
-                >
-                  <strong>{getWeekLabel(weekGroup.weekStart)}</strong>
-                  <span>
-                    ({formatDayMonth(weekGroup.weekStart)} -{" "}
-                    {formatDayMonth(weekGroup.weekEnd)})
-                  </span>
-                </div>
-              ))}
+              {weekHeaderGroups.map((weekGroup) => {
+                const weekWidth = DAY_WIDTH * weekGroup.visibleDays;
+                const showWeekRange = weekWidth >= WEEK_RANGE_MIN_WIDTH;
+
+                return (
+                  <div
+                    key={weekGroup.key}
+                    className="week-header"
+                    style={{ width: weekWidth }}
+                  >
+                    <strong className="week-label">{getWeekLabel(weekGroup.weekStart)}</strong>
+                    {showWeekRange ? (
+                      <span className="week-range">
+                        ({formatDayMonth(weekGroup.weekStart)} -{" "}
+                        {formatDayMonth(weekGroup.weekEnd)})
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="day-header-row">
@@ -163,7 +174,8 @@ export const ResourceTimeline = ({
                   className="day-header"
                   style={{ width: DAY_WIDTH }}
                 >
-                  <span>{formatDayLabel(day)}</span>
+                  <span className="day-label day-label--default">{formatDayLabel(day)}</span>
+                  <span className="day-label day-label--compact">{getCompactDayLabel(day)}</span>
                 </div>
               ))}
             </div>

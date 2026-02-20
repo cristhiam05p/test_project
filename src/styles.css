@@ -89,7 +89,8 @@ header p {
 }
 
 .timeline-header {
-  display: flex;
+  display: inline-flex;
+  min-width: max-content;
   position: sticky;
   top: 0;
   z-index: 4;
@@ -115,11 +116,26 @@ header p {
   display: flex;
   gap: 0.25rem;
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.week-label,
+.week-range {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .week-header strong {
   font-size: 0.72rem;
+  flex: 0 1 auto;
+}
+
+.week-range {
+  flex: 1 1 auto;
 }
 
 .day-header {
@@ -128,8 +144,20 @@ header p {
   font-size: 0.7rem;
   min-height: var(--timeline-header-day-height);
   display: flex;
-  flex-direction: column;
   justify-content: center;
+  min-width: 0;
+}
+
+.day-label {
+  display: none;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.day-label--default {
+  display: block;
 }
 
 .day-header strong {
@@ -273,6 +301,18 @@ header p {
 
   .timeline-shell {
     max-height: calc(100vh - 220px);
+  }
+
+  .week-header {
+    gap: 0.15rem;
+  }
+
+  .day-label--default {
+    display: none;
+  }
+
+  .day-label--compact {
+    display: block;
   }
 
   .modal-panel {
