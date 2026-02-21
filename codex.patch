@@ -1,856 +1,1247 @@
-diff --git a/.gitignore b/.gitignore
+diff --git a/src/App.tsx b/src/App.tsx
+index e7013ea3228dc34963f6f044333d819160a4fb0e..a7618e70880992a4faa6f7299e86b97064deaef0 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,8 +1,15 @@
+ import { ResourceTimeline } from './components/ResourceTimeline';
+-import { demoStartDate, workPackages } from './data/mock-data';
++import { demoStartDate, employeeProfiles, timelineWeeks, workPackages } from './data/mock-data';
+ 
+ function App() {
+-  return <ResourceTimeline tasks={workPackages} timelineStartDate={demoStartDate} />;
++  return (
++    <ResourceTimeline
++      tasks={workPackages}
++      employees={employeeProfiles}
++      timelineStartDate={demoStartDate}
++      timelineDays={timelineWeeks * 7}
++    />
++  );
+ }
+ 
+ export default App;
+diff --git a/src/components/DepartmentSection.tsx b/src/components/DepartmentSection.tsx
+index 0da3e1bb01f0f6b24f95b695f3e6d216f62e4820..2c8b91198fcfd8c3422b9dfa81b4f4d46166ed25 100644
+--- a/src/components/DepartmentSection.tsx
++++ b/src/components/DepartmentSection.tsx
+@@ -1,38 +1,47 @@
+-import type { WorkPackage } from '../types/workPackage';
+-import type { EmployeeGroup } from '../utils/timelineUtils';
+-import { EmployeeRow } from './EmployeeRow';
++import type { WorkPackage } from "../types/workPackage";
++import type { EmployeeGroup } from "../utils/timelineUtils";
++import { EmployeeRow } from "./EmployeeRow";
+ 
+ interface DepartmentSectionProps {
+   department: string;
+   employees: EmployeeGroup[];
+   timelineStartDate: string;
+   timelineDays: number;
+-  dayWidth: number;
++  dayWidths: number[];
++  cumulativeOffsets: number[];
++  totalTimelineWidth: number;
+   onTaskSelect: (task: WorkPackage) => void;
++  onEmployeeSelect: (employeeId: string) => void;
+ }
+ 
+ export const DepartmentSection = ({
+   department,
+   employees,
+   timelineStartDate,
+   timelineDays,
+-  dayWidth,
++  dayWidths,
++  cumulativeOffsets,
++  totalTimelineWidth,
+   onTaskSelect,
++  onEmployeeSelect,
+ }: DepartmentSectionProps) => {
+   return (
+     <section className="department-section">
+       <h2>{department}</h2>
+       {employees.map((employee) => (
+         <EmployeeRow
+           key={employee.employeeId}
+           employeeName={employee.employeeName}
+           tasks={employee.tasks}
+           timelineStartDate={timelineStartDate}
+           timelineDays={timelineDays}
+-          dayWidth={dayWidth}
++          dayWidths={dayWidths}
++          cumulativeOffsets={cumulativeOffsets}
++          totalTimelineWidth={totalTimelineWidth}
+           onTaskSelect={onTaskSelect}
++          onEmployeeSelect={() => onEmployeeSelect(employee.employeeId)}
+         />
+       ))}
+     </section>
+   );
+ };
+diff --git a/src/components/EmployeeDetailsModal.tsx b/src/components/EmployeeDetailsModal.tsx
 new file mode 100644
-index 0000000000000000000000000000000000000000..a5926d87e493ec417af03b7e2bece60e4a8f726d
+index 0000000000000000000000000000000000000000..0ca5bbeb18710efd6fb9edb2e8e42599a94ffebb
 --- /dev/null
-+++ b/.gitignore
-@@ -0,0 +1,6 @@
-+node_modules/
-+dist/
-+.env
-+.env.*
-+!.env.example
-+.DS_Store
-diff --git a/README.md b/README.md
-index 8ae9f5d160ebef10750c24df8f5793cf18d98ac9..a9d37c49d0db5c9f8e5defa33d1ffa3be496a67e 100644
---- a/README.md
-+++ b/README.md
-@@ -1,42 +1,97 @@
- # Resource Timeline MVP
- 
- MVP para visualizar paquetes de trabajo por **departamento** y **empleado** en una línea de tiempo (4 semanas, día a día).
- 
- ## Stack
- 
- - React + Vite + TypeScript
--- Sin backend (mock data local)
-+- API serverless en `api/` (compatible con Vercel Functions)
-+- Datos seed/fixtures en memoria (para demo del MVP)
- 
- ## Funcionalidades incluidas
- 
- - Vista principal "Recursos" con:
-   - Eje vertical: Departamentos -> empleados.
-   - Eje horizontal: 28 días (4 semanas) desde una fecha de demo.
- - Bloques de tareas por empleado usando:
-   - `scheduledStartDate` como inicio visual.
-   - `durationDays` para ancho del bloque.
- - Modal de detalle al seleccionar una tarea con:
-   - título, descripción, proyecto, fechas y dependencias.
-   - `deadlineDate` destacado visualmente.
- - Filtros mínimos:
-   - por departamento.
-   - por nombre de empleado (buscador).
- 
-+## API MVP “Vista Recursos” (Paso 1 + Paso 2)
++++ b/src/components/EmployeeDetailsModal.tsx
+@@ -0,0 +1,156 @@
++import { useEffect, useMemo } from "react";
++import { createPortal } from "react-dom";
++import type { EmployeeProfile } from "../data/mock-data";
++import type { WorkPackage } from "../types/workPackage";
++import { addDays, differenceInDays, formatISODate, getISOWeek, toDate } from "../utils/dateUtils";
 +
-+Se implementó el modelo de datos normalizado + CRUD mínimo con validaciones en rutas `api/`:
-+
-+- `/api/departments`
-+- `/api/employees`
-+- `/api/projects`
-+- `/api/tasks`
-+- `/api/task-assignments`
-+- `/api/time-off`
-+
-+Cada colección soporta:
-+
-+- `GET /api/<resource>`
-+- `POST /api/<resource>`
-+- `GET /api/<resource>/:id`
-+- `PATCH /api/<resource>/:id`
-+- `DELETE /api/<resource>/:id`
-+
-+### Reglas de validación implementadas
-+
-+- `endDate >= startDate` para Task y TimeOff.
-+- `Department.name` único.
-+- `Project.name` único.
-+- FKs válidas en Employee, Task, TaskAssignment y TimeOff.
-+- `allocationHours >= 0`, `estimatedHours >= 0`.
-+- `status` y `type` restringidos a enums válidos.
-+- `TaskAssignment (taskId, employeeId)` único.
-+- Soft delete en Department/Employee/Project (`isActive=false`).
-+- `Task DELETE` devuelve `409` si tiene asignaciones relacionadas.
-+
-+### POSTERGADO (no Vercel-only)
-+
-+- Persistencia relacional real con Postgres/ORM y migraciones automáticas de deploy (`prisma migrate deploy`).
-+- Estado actual de esta iteración: se usa almacenamiento en memoria para demo y validación funcional del flujo CRUD en serverless.
-+
-+## Variables de entorno
-+
-+No son obligatorias para esta iteración (almacenamiento en memoria).
-+
-+Para un siguiente paso con persistencia en Vercel se recomienda:
-+
-+- `DATABASE_URL` (Vercel Postgres / Neon / Supabase)
-+
- ## Estructura principal
- 
- ```txt
- src/
-   components/
-     ResourceTimeline.tsx
-     DepartmentSection.tsx
-     EmployeeRow.tsx
-     TaskBlock.tsx
-     TaskDetailsModal.tsx
-   data/
-     mock-data.ts
-   types/
-     workPackage.ts
-   utils/
-     dateUtils.ts
-     timelineUtils.ts
-+api/
-+  departments/
-+  employees/
-+  projects/
-+  tasks/
-+  task-assignments/
-+  time-off/
-+lib/
-+  api.js
-+  store.js
- ```
-diff --git a/api/departments/[id].js b/api/departments/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..a80f281471d591679ed05d70838c1938fe6348bd
---- /dev/null
-+++ b/api/departments/[id].js
-@@ -0,0 +1,49 @@
-+import { getStore } from '../../lib/store.js';
-+import { parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const recordId = parseId(req);
-+  const department = store.departments.find((item) => item.id === recordId);
-+
-+  if (!department) {
-+    return res.status(404).json({ error: 'Department not found.' });
-+  }
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(department);
-+  }
-+
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
-+
-+    if (body.name !== undefined) {
-+      if (typeof body.name !== 'string' || !body.name.trim()) {
-+        return res.status(400).json({ error: 'name must be a non-empty string.' });
-+      }
-+
-+      const duplicate = store.departments.some(
-+        (item) => item.id !== recordId && item.name.toLowerCase() === body.name.trim().toLowerCase(),
-+      );
-+      if (duplicate) {
-+        return res.status(409).json({ error: 'Department.name must be unique.' });
-+      }
-+
-+      department.name = body.name.trim();
-+    }
-+
-+    if (typeof body.isActive === 'boolean') {
-+      department.isActive = body.isActive;
-+    }
-+
-+    return res.status(200).json(department);
-+  }
-+
-+  if (req.method === 'DELETE') {
-+    department.isActive = false;
-+    return res.status(200).json(department);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++interface EmployeeDetailsModalProps {
++  employee: EmployeeProfile | null;
++  tasks: WorkPackage[];
++  timelineStartDate: string;
++  timelineDays: number;
++  onClose: () => void;
 +}
-diff --git a/api/departments/index.js b/api/departments/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..6782d1a3c84d6c2a12f1cbfdf08c59a4fffaaa69
---- /dev/null
-+++ b/api/departments/index.js
-@@ -0,0 +1,28 @@
-+import { getStore, id } from '../../lib/store.js';
-+import { parseBody, sendMethodNotAllowed } from '../../lib/api.js';
 +
-+export default async function handler(req, res) {
-+  const store = getStore();
++const getVisibleHours = (tasks: WorkPackage[], startDate: string, timelineDays: number) => {
++  const visibleStart = toDate(startDate);
++  const visibleEnd = addDays(visibleStart, timelineDays - 1);
 +
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.departments);
-+  }
++  return tasks.reduce((total, task) => {
++    const taskStart = toDate(task.scheduledStartDate);
++    const taskEnd = addDays(taskStart, task.durationDays - 1);
++    if (taskEnd < visibleStart || taskStart > visibleEnd) {
++      return total;
++    }
++    const overlapStart = taskStart < visibleStart ? visibleStart : taskStart;
++    const overlapEnd = taskEnd > visibleEnd ? visibleEnd : taskEnd;
++    const overlapDays = differenceInDays(overlapStart, overlapEnd) + 1;
++    return total + overlapDays * 8;
++  }, 0);
++};
 +
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+    if (!body || typeof body.name !== 'string' || !body.name.trim()) {
-+      return res.status(400).json({ error: 'name is required.' });
++const getOverloadedWeeks = (tasks: WorkPackage[], weeklyCapacityHours: number) => {
++  const weekHours = new Map<string, number>();
++
++  tasks.forEach((task) => {
++    const taskStart = toDate(task.scheduledStartDate);
++    Array.from({ length: task.durationDays }, (_, dayOffset) => addDays(taskStart, dayOffset)).forEach((day) => {
++      const key = `${day.getFullYear()}-${getISOWeek(day)}`;
++      weekHours.set(key, (weekHours.get(key) ?? 0) + 8);
++    });
++  });
++
++  return [...weekHours.entries()]
++    .filter(([, hours]) => hours > weeklyCapacityHours)
++    .map(([weekKey, hours]) => ({ weekKey, hours }));
++};
++
++export const EmployeeDetailsModal = ({
++  employee,
++  tasks,
++  timelineStartDate,
++  timelineDays,
++  onClose,
++}: EmployeeDetailsModalProps) => {
++  const visibleHours = useMemo(() => {
++    if (!employee) {
++      return 0;
++    }
++    return getVisibleHours(tasks, timelineStartDate, timelineDays);
++  }, [employee, tasks, timelineStartDate, timelineDays]);
++
++  const overloadedWeeks = useMemo(() => {
++    if (!employee) {
++      return [];
++    }
++    return getOverloadedWeeks(tasks, employee.weeklyCapacityHours);
++  }, [employee, tasks]);
++
++  useEffect(() => {
++    if (!employee) {
++      return;
 +    }
 +
-+    const name = body.name.trim();
-+    if (store.departments.some((department) => department.name.toLowerCase() === name.toLowerCase())) {
-+      return res.status(409).json({ error: 'Department.name must be unique.' });
-+    }
++    const previousOverflow = document.body.style.overflow;
++    document.body.style.overflow = "hidden";
 +
-+    const department = { id: id('dep', store), name, isActive: true };
-+    store.departments.push(department);
-+    return res.status(201).json(department);
-+  }
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key === "Escape") {
++        onClose();
++      }
++    };
 +
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/api/employees/[id].js b/api/employees/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..ae73711b24ac704a49992988f5bb53de18780a89
---- /dev/null
-+++ b/api/employees/[id].js
-@@ -0,0 +1,49 @@
-+import { getStore } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const employee = store.employees.find((item) => item.id === parseId(req));
++    window.addEventListener("keydown", onKeyDown);
++    return () => {
++      document.body.style.overflow = previousOverflow;
++      window.removeEventListener("keydown", onKeyDown);
++    };
++  }, [employee, onClose]);
 +
 +  if (!employee) {
-+    return res.status(404).json({ error: 'Employee not found.' });
++    return null;
 +  }
 +
-+  if (req.method === 'GET') {
-+    return res.status(200).json(employee);
-+  }
++  return createPortal(
++    <div className="modal-overlay" onClick={onClose} role="presentation">
++      <aside className="modal-panel" onClick={(event) => event.stopPropagation()}>
++        <button className="close-button" onClick={onClose} type="button" aria-label="Cerrar detalles de empleado">
++          ✕
++        </button>
 +
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
++        <h3>{employee.employeeName}</h3>
 +
-+    if (body.departmentId !== undefined && !store.departments.some((department) => department.id === body.departmentId)) {
-+      return res.status(400).json({ error: 'Employee.departmentId must exist.' });
-+    }
++        <dl>
++          <dt>Departamento</dt>
++          <dd>{employee.department}</dd>
 +
-+    if (body.capacityHoursPerWeek !== undefined && !isNonNegativeNumber(body.capacityHoursPerWeek)) {
-+      return res.status(400).json({ error: 'capacityHoursPerWeek must be >= 0.' });
-+    }
++          <dt>Rol</dt>
++          <dd>{employee.role}</dd>
 +
-+    if (body.costPerHour !== undefined && !isNonNegativeNumber(body.costPerHour)) {
-+      return res.status(400).json({ error: 'costPerHour must be >= 0.' });
-+    }
++          <dt>Coste/hora</dt>
++          <dd>€{employee.hourlyCost}</dd>
 +
-+    Object.assign(employee, {
-+      ...(body.fullName !== undefined ? { fullName: body.fullName.trim() } : {}),
-+      ...(body.departmentId !== undefined ? { departmentId: body.departmentId } : {}),
-+      ...(body.capacityHoursPerWeek !== undefined ? { capacityHoursPerWeek: body.capacityHoursPerWeek } : {}),
-+      ...(body.costPerHour !== undefined ? { costPerHour: body.costPerHour } : {}),
-+      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
++          <dt>Horas/semana</dt>
++          <dd>{employee.weeklyCapacityHours} h</dd>
++
++          <dt>Ausencias</dt>
++          <dd>
++            {employee.absences.length === 0
++              ? "Sin ausencias registradas"
++              : employee.absences.map((absence) => (
++                  <div key={`${absence.startDate}-${absence.reason}`}>
++                    {absence.reason}: {absence.startDate} → {absence.endDate}
++                  </div>
++                ))}
++          </dd>
++
++          <dt>Horas asignadas (ventana visible)</dt>
++          <dd>{visibleHours} h</dd>
++
++          <dt>Semanas con sobrecarga</dt>
++          <dd>
++            {overloadedWeeks.length === 0
++              ? "Sin sobrecarga"
++              : overloadedWeeks.map((entry) => (
++                  <div key={entry.weekKey}>
++                    {entry.weekKey} ({entry.hours} h)
++                  </div>
++                ))}
++          </dd>
++        </dl>
++
++        <h4>Tareas asignadas</h4>
++        <ul>
++          {tasks.map((task) => (
++            <li key={task.id}>
++              <strong>{task.title}</strong> — {task.projectName} ({task.scheduledStartDate} → {formatISODate(addDays(toDate(task.scheduledStartDate), task.durationDays - 1))})
++              <br />
++              <small>{task.description}</small>
++            </li>
++          ))}
++        </ul>
++      </aside>
++    </div>,
++    document.body,
++  );
++};
+diff --git a/src/components/EmployeeRow.tsx b/src/components/EmployeeRow.tsx
+index 440845f10f9707a12300d6bb3219bce5f0e80e86..a566fd1803fb3f8fea7a290a3958d21c8a0ca797 100644
+--- a/src/components/EmployeeRow.tsx
++++ b/src/components/EmployeeRow.tsx
+@@ -1,40 +1,54 @@
+-import type { WorkPackage } from '../types/workPackage';
+-import { TaskBlock } from './TaskBlock';
++import type { WorkPackage } from "../types/workPackage";
++import { TaskBlock } from "./TaskBlock";
+ 
+ interface EmployeeRowProps {
+   employeeName: string;
+   tasks: WorkPackage[];
+   timelineStartDate: string;
+   timelineDays: number;
+-  dayWidth: number;
++  dayWidths: number[];
++  cumulativeOffsets: number[];
++  totalTimelineWidth: number;
+   onTaskSelect: (task: WorkPackage) => void;
++  onEmployeeSelect: () => void;
+ }
+ 
+ export const EmployeeRow = ({
+   employeeName,
+   tasks,
+   timelineStartDate,
+   timelineDays,
+-  dayWidth,
++  dayWidths,
++  cumulativeOffsets,
++  totalTimelineWidth,
+   onTaskSelect,
++  onEmployeeSelect,
+ }: EmployeeRowProps) => {
+   return (
+     <div className="employee-row">
+-      <div className="employee-label">{employeeName}</div>
+-      <div className="employee-timeline" style={{ width: dayWidth * timelineDays }}>
++      <button className="employee-label employee-button" onClick={onEmployeeSelect} type="button">
++        {employeeName}
++      </button>
++      <div className="employee-timeline" style={{ width: totalTimelineWidth }}>
+         {Array.from({ length: timelineDays }, (_, index) => (
+-          <div key={index} className="day-cell" style={{ width: dayWidth }} />
++          <div
++            key={index}
++            className="day-cell"
++            style={{ width: dayWidths[index], left: cumulativeOffsets[index] }}
++          />
+         ))}
+         {tasks.map((task) => (
+           <TaskBlock
+             key={task.id}
+             task={task}
+             timelineStartDate={timelineStartDate}
+-            dayWidth={dayWidth}
++            dayWidth={dayWidths[0]}
++            dayWidths={dayWidths}
++            cumulativeOffsets={cumulativeOffsets}
+             onSelect={onTaskSelect}
+           />
+         ))}
+       </div>
+     </div>
+   );
+ };
+diff --git a/src/components/ResourceTimeline.tsx b/src/components/ResourceTimeline.tsx
+index fc8647caba84355f9c9aaa810441054f76385312..0b97b732c82156a968ec6c4d3328c062093b88f4 100644
+--- a/src/components/ResourceTimeline.tsx
++++ b/src/components/ResourceTimeline.tsx
+@@ -1,116 +1,158 @@
+ import { useMemo, useState } from "react";
++import type { EmployeeProfile } from "../data/mock-data";
+ import type { WorkPackage } from "../types/workPackage";
+ import {
+   formatDayLabel,
+   formatDayMonth,
+   getDayRange,
+   getWeekHeaderGroups,
+   getWeekLabel,
+ } from "../utils/dateUtils";
+ import { includesNormalized } from "../utils/textUtils";
+ import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
+ import { DepartmentSection } from "./DepartmentSection";
++import { EmployeeDetailsModal } from "./EmployeeDetailsModal";
+ import { TaskDetailsModal } from "./TaskDetailsModal";
+ 
+ interface ResourceTimelineProps {
+   tasks: WorkPackage[];
++  employees: EmployeeProfile[];
+   timelineStartDate: string;
+   timelineDays?: number;
+ }
+ 
+ const DAY_WIDTH = 42;
++const EXPANDED_DAY_WIDTH = 72;
+ const WEEK_RANGE_MIN_WIDTH = 150;
+ 
+ const getCompactDayLabel = (day: Date): string =>
+   day.toLocaleDateString("es-ES", { day: "2-digit" });
+ 
+ export const ResourceTimeline = ({
+   tasks,
++  employees,
+   timelineStartDate,
+   timelineDays = 28,
+ }: ResourceTimelineProps) => {
+   const [selectedTask, setSelectedTask] = useState<WorkPackage | null>(null);
++  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+   const [selectedDepartment, setSelectedDepartment] = useState<string>("Todos");
+   const [employeeQuery, setEmployeeQuery] = useState<string>("");
++  const [expandedWeekKey, setExpandedWeekKey] = useState<string | null>(null);
+ 
+   const departments = useMemo(
+     () => ["Todos", ...new Set(tasks.map((task) => task.department))],
+     [tasks],
+   );
+ 
+   const projectLegend = useMemo(() => {
+     const projects = new Map<
+       string,
+       { projectName: string; projectColor: string }
+     >();
+     tasks.forEach((task) => {
+       projects.set(task.projectId, {
+         projectName: task.projectName,
+         projectColor: task.projectColor,
+       });
+     });
+     return [...projects.entries()].map(([projectId, data]) => ({
+       projectId,
+       ...data,
+     }));
+   }, [tasks]);
+ 
+   const filteredTasks = useMemo(() => {
+     return tasks.filter((task) => {
+       const matchesDepartment =
+         selectedDepartment === "Todos" ||
+         task.department === selectedDepartment;
+ 
+       const matchesSearch =
+         includesNormalized(task.employeeName, employeeQuery) ||
+         includesNormalized(task.title, employeeQuery) ||
+-        includesNormalized(task.description, employeeQuery);
++        includesNormalized(task.description, employeeQuery) ||
++        includesNormalized(task.projectName, employeeQuery);
+ 
+       return matchesDepartment && matchesSearch;
+     });
+   }, [tasks, selectedDepartment, employeeQuery]);
+ 
+   const groupedData = useMemo(
+     () => groupByDepartmentAndEmployee(filteredTasks),
+     [filteredTasks],
+   );
+ 
+   const dayRange = useMemo(
+     () => getDayRange(timelineStartDate, timelineDays),
+     [timelineDays, timelineStartDate],
+   );
+ 
+   const weekHeaderGroups = useMemo(
+     () => getWeekHeaderGroups(dayRange),
+     [dayRange],
+   );
+ 
++  // Decisión: modo accordion para KW (solo una semana expandida a la vez).
++  const dayWidths = useMemo(() => {
++    const weekByDay = dayRange.map((day) => {
++      const matchingWeek = weekHeaderGroups.find((group) => day >= group.weekStart && day <= group.weekEnd);
++      return matchingWeek?.key;
 +    });
 +
-+    return res.status(200).json(employee);
-+  }
++    return weekByDay.map((weekKey) => (weekKey && weekKey === expandedWeekKey ? EXPANDED_DAY_WIDTH : DAY_WIDTH));
++  }, [dayRange, weekHeaderGroups, expandedWeekKey]);
 +
-+  if (req.method === 'DELETE') {
-+    employee.isActive = false;
-+    return res.status(200).json(employee);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
-+}
-diff --git a/api/employees/index.js b/api/employees/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..bd81e31fb2f262c25d9a65b0065328cef647ed3e
---- /dev/null
-+++ b/api/employees/index.js
-@@ -0,0 +1,43 @@
-+import { getStore, id } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, sendMethodNotAllowed } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.employees);
-+  }
-+
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+    if (!body || typeof body.fullName !== 'string' || !body.fullName.trim() || typeof body.departmentId !== 'string') {
-+      return res.status(400).json({ error: 'fullName and departmentId are required.' });
-+    }
-+
-+    if (!store.departments.some((department) => department.id === body.departmentId)) {
-+      return res.status(400).json({ error: 'Employee.departmentId must exist.' });
-+    }
-+
-+    if (body.capacityHoursPerWeek !== undefined && !isNonNegativeNumber(body.capacityHoursPerWeek)) {
-+      return res.status(400).json({ error: 'capacityHoursPerWeek must be >= 0.' });
-+    }
-+
-+    if (body.costPerHour !== undefined && !isNonNegativeNumber(body.costPerHour)) {
-+      return res.status(400).json({ error: 'costPerHour must be >= 0.' });
-+    }
-+
-+    const employee = {
-+      id: id('emp', store),
-+      fullName: body.fullName.trim(),
-+      departmentId: body.departmentId,
-+      capacityHoursPerWeek: body.capacityHoursPerWeek ?? 40,
-+      costPerHour: body.costPerHour ?? null,
-+      isActive: true,
-+    };
-+
-+    store.employees.push(employee);
-+    return res.status(201).json(employee);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/api/projects/[id].js b/api/projects/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..617ea0dcf3a9611414a058e60308d625058f2bfa
---- /dev/null
-+++ b/api/projects/[id].js
-@@ -0,0 +1,51 @@
-+import { getStore } from '../../lib/store.js';
-+import { parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
-+
-+const hexColorRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const project = store.projects.find((item) => item.id === parseId(req));
-+
-+  if (!project) {
-+    return res.status(404).json({ error: 'Project not found.' });
-+  }
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(project);
-+  }
-+
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
-+
-+    if (body.name !== undefined) {
-+      if (typeof body.name !== 'string' || !body.name.trim()) {
-+        return res.status(400).json({ error: 'name must be a non-empty string.' });
-+      }
-+      const duplicate = store.projects.some((item) => item.id !== project.id && item.name.toLowerCase() === body.name.trim().toLowerCase());
-+      if (duplicate) {
-+        return res.status(409).json({ error: 'Project.name must be unique.' });
-+      }
-+      project.name = body.name.trim();
-+    }
-+
-+    if (body.color !== undefined && (typeof body.color !== 'string' || !hexColorRegex.test(body.color))) {
-+      return res.status(400).json({ error: 'color must be a valid hex code.' });
-+    }
-+
-+    Object.assign(project, {
-+      ...(body.color !== undefined ? { color: body.color } : {}),
-+      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
++  const cumulativeOffsets = useMemo(() => {
++    let acc = 0;
++    return dayWidths.map((width) => {
++      const left = acc;
++      acc += width;
++      return left;
 +    });
++  }, [dayWidths]);
 +
-+    return res.status(200).json(project);
-+  }
++  const totalTimelineWidth = useMemo(
++    () => dayWidths.reduce((sum, width) => sum + width, 0),
++    [dayWidths],
++  );
 +
-+  if (req.method === 'DELETE') {
-+    project.isActive = false;
-+    return res.status(200).json(project);
-+  }
+   const taskTitleById = useMemo(() => {
+     return new Map(tasks.map((task) => [task.id, task.title]));
+   }, [tasks]);
+ 
++  const selectedEmployee = useMemo(
++    () => employees.find((employee) => employee.employeeId === selectedEmployeeId) ?? null,
++    [employees, selectedEmployeeId],
++  );
 +
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
++  const selectedEmployeeTasks = useMemo(
++    () => tasks.filter((task) => task.employeeId === selectedEmployeeId),
++    [tasks, selectedEmployeeId],
++  );
++
+   return (
+     <div className="resource-timeline-page">
+       <header>
+         <h1>Vista Recursos (MVP)</h1>
+         <p>
+           Visualización por departamento y empleado para saber quién está
+           haciendo qué y cuándo.
+         </p>
+       </header>
+ 
+       <section className="filters">
+         <label>
+           Departamento
+           <select
+             value={selectedDepartment}
+             onChange={(event) => setSelectedDepartment(event.target.value)}
+           >
+             {departments.map((department) => (
+               <option key={department} value={department}>
+                 {department}
+               </option>
+             ))}
+           </select>
+         </label>
+ 
+@@ -120,90 +162,110 @@ export const ResourceTimeline = ({
+             placeholder="Buscar por nombre, tarea o descripción"
+             value={employeeQuery}
+             onChange={(event) => setEmployeeQuery(event.target.value)}
+           />
+         </label>
+       </section>
+ 
+       <section className="project-legend" aria-label="Leyenda de proyectos">
+         {projectLegend.map((project) => (
+           <span key={project.projectId} className="legend-item">
+             <i
+               style={{ backgroundColor: project.projectColor }}
+               aria-hidden="true"
+             />
+             {project.projectName}
+           </span>
+         ))}
+       </section>
+ 
+       <div className="timeline-shell">
+         <div className="timeline-header">
+           <div className="employee-label header">Departamento / Empleado</div>
+ 
+           <div
+             className="timeline-days"
+-            style={{ width: DAY_WIDTH * timelineDays }}
++            style={{ width: totalTimelineWidth }}
+           >
+             <div className="week-header-row">
+               {weekHeaderGroups.map((weekGroup) => {
+-                const weekWidth = DAY_WIDTH * weekGroup.visibleDays;
++                const weekDays = dayRange.filter(
++                  (day) => day >= weekGroup.weekStart && day <= weekGroup.weekEnd,
++                );
++                const weekWidth = weekDays.reduce((sum, day) => {
++                  const dayIndex = dayRange.indexOf(day);
++                  return sum + dayWidths[dayIndex];
++                }, 0);
+                 const showWeekRange = weekWidth >= WEEK_RANGE_MIN_WIDTH;
++                const isActive = expandedWeekKey === weekGroup.key;
+ 
+                 return (
+-                  <div
++                  <button
+                     key={weekGroup.key}
+-                    className="week-header"
++                    className={`week-header ${isActive ? "week-header--active" : ""}`}
+                     style={{ width: weekWidth }}
++                    type="button"
++                    onClick={() => setExpandedWeekKey((current) => (current === weekGroup.key ? null : weekGroup.key))}
+                   >
+                     <strong className="week-label">{getWeekLabel(weekGroup.weekStart)}</strong>
+                     {showWeekRange ? (
+                       <span className="week-range">
+                         ({formatDayMonth(weekGroup.weekStart)} -{" "}
+                         {formatDayMonth(weekGroup.weekEnd)})
+                       </span>
+                     ) : null}
+-                  </div>
++                  </button>
+                 );
+               })}
+             </div>
+ 
+             <div className="day-header-row">
+               {dayRange.map((day, index) => (
+                 <div
+                   key={index}
+                   className="day-header"
+-                  style={{ width: DAY_WIDTH }}
++                  style={{ width: dayWidths[index] }}
+                 >
+                   <span className="day-label day-label--default">{formatDayLabel(day)}</span>
+                   <span className="day-label day-label--compact">{getCompactDayLabel(day)}</span>
+                 </div>
+               ))}
+             </div>
+           </div>
+         </div>
+ 
+         {groupedData.length === 0 ? (
+           <p className="empty-state">No hay tareas con los filtros actuales.</p>
+         ) : (
+           groupedData.map((department) => (
+             <DepartmentSection
+               key={department.department}
+               department={department.department}
+               employees={department.employees}
+               timelineStartDate={timelineStartDate}
+               timelineDays={timelineDays}
+-              dayWidth={DAY_WIDTH}
++              dayWidths={dayWidths}
++              cumulativeOffsets={cumulativeOffsets}
++              totalTimelineWidth={totalTimelineWidth}
+               onTaskSelect={setSelectedTask}
++              onEmployeeSelect={setSelectedEmployeeId}
+             />
+           ))
+         )}
+       </div>
+ 
+       <TaskDetailsModal
+         task={selectedTask}
+         taskTitleById={taskTitleById}
+         onClose={() => setSelectedTask(null)}
+       />
++
++      <EmployeeDetailsModal
++        employee={selectedEmployee}
++        tasks={selectedEmployeeTasks}
++        timelineStartDate={timelineStartDate}
++        timelineDays={timelineDays}
++        onClose={() => setSelectedEmployeeId(null)}
++      />
+     </div>
+   );
+ };
+diff --git a/src/components/TaskBlock.tsx b/src/components/TaskBlock.tsx
+index 58a26cba1d73c998b3f94cebbea6283b2725bb22..67671c5ddfe23d703a0f2070ed13f1a0ed115ce6 100644
+--- a/src/components/TaskBlock.tsx
++++ b/src/components/TaskBlock.tsx
+@@ -1,33 +1,47 @@
+ import type { WorkPackage } from "../types/workPackage";
+ import { getTaskOffsetDays } from "../utils/timelineUtils";
+ 
+ interface TaskBlockProps {
+   task: WorkPackage;
+   timelineStartDate: string;
+   dayWidth: number;
++  dayWidths?: number[];
++  cumulativeOffsets?: number[];
+   onSelect: (task: WorkPackage) => void;
+ }
+ 
+ export const TaskBlock = ({
+   task,
+   timelineStartDate,
+   dayWidth,
++  dayWidths,
++  cumulativeOffsets,
+   onSelect,
+ }: TaskBlockProps) => {
+-  const left =
+-    getTaskOffsetDays(timelineStartDate, task.scheduledStartDate) * dayWidth;
+-  const width = task.durationDays * dayWidth;
++  const startOffset = getTaskOffsetDays(timelineStartDate, task.scheduledStartDate);
++  const hasVariableWidths = dayWidths && cumulativeOffsets && dayWidths.length > 0;
++
++  const left = hasVariableWidths
++    ? cumulativeOffsets[Math.max(0, startOffset)] ?? 0
++    : startOffset * dayWidth;
++
++  const width = hasVariableWidths
++    ? Array.from({ length: task.durationDays }, (_, index) => dayWidths[startOffset + index] ?? 0).reduce(
++        (total, current) => total + current,
++        0,
++      )
++    : task.durationDays * dayWidth;
+ 
+   return (
+     <button
+       className="task-block"
+       style={{ left, width, background: task.projectColor }}
+       onClick={() => onSelect(task)}
+       title={`${task.title} (${task.projectName})`}
+       type="button"
+     >
+       <span className="task-block-title">{task.title}</span>
+       <span className="task-block-project">{task.projectName}</span>
+     </button>
+   );
+ };
+diff --git a/src/data/mock-data.ts b/src/data/mock-data.ts
+index 1f66d6dfb06c3cdf4fc01e0408aade60e267c5d1..3ef46603e4c6a122c2c204f04fb5ffd5170449b4 100644
+--- a/src/data/mock-data.ts
++++ b/src/data/mock-data.ts
+@@ -1,196 +1,189 @@
++import { addDays, formatISODate, toDate } from "../utils/dateUtils";
+ import type { WorkPackage } from "../types/workPackage";
+ 
++export interface EmployeeProfile {
++  employeeId: string;
++  employeeName: string;
++  department: string;
++  role: string;
++  hourlyCost: number;
++  weeklyCapacityHours: number;
++  absences: { startDate: string; endDate: string; reason: string }[];
 +}
-diff --git a/api/projects/index.js b/api/projects/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..9691077c5d925af414e43e91da259a28e20916e0
---- /dev/null
-+++ b/api/projects/index.js
-@@ -0,0 +1,34 @@
-+import { getStore, id } from '../../lib/store.js';
-+import { parseBody, sendMethodNotAllowed } from '../../lib/api.js';
 +
-+const hexColorRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+ export const demoStartDate = "2026-02-02";
++export const timelineWeeks = 12;
+ 
+ export const projectCatalog = {
+   "P-RHEIN": { name: "Project Rhein", color: "#2563eb" },
+   "P-ANDEN": { name: "Project Anden", color: "#0f766e" },
+   "P-AURORA": { name: "Project Aurora", color: "#7c3aed" },
+   "P-ATLAS": { name: "Project Atlas", color: "#c2410c" },
++  "P-DELTA": { name: "Project Delta", color: "#db2777" },
++  "P-NOVA": { name: "Project Nova", color: "#0891b2" },
+ } as const;
+ 
++type ProjectId = keyof typeof projectCatalog;
 +
-+export default async function handler(req, res) {
-+  const store = getStore();
++const departments = [
++  {
++    name: "Hardware",
++    roles: ["Electronics Engineer", "PCB Designer", "Validation Engineer"],
++    employees: [
++      "María Rojas",
++      "Luis Mendoza",
++      "Ana Pardo",
++      "Renata Blanco",
++      "Iván Cornejo",
++    ],
++  },
++  {
++    name: "Software",
++    roles: ["Firmware Engineer", "Backend Engineer", "Frontend Engineer"],
++    employees: [
++      "Diego León",
++      "Sofía Nieto",
++      "Carlos Núñez",
++      "Tomás Vera",
++      "Elisa Cárdenas",
++    ],
++  },
++  {
++    name: "Producción",
++    roles: ["Process Engineer", "Quality Analyst", "Operations Lead"],
++    employees: [
++      "Elena Torres",
++      "Jorge Vidal",
++      "Valeria Solís",
++      "Martín Cuevas",
++      "Nadia Vega",
++    ],
++  },
++  {
++    name: "QA",
++    roles: ["QA Analyst", "Automation Engineer", "Reliability Engineer"],
++    employees: [
++      "Gabriela Soto",
++      "Leandro Flores",
++      "Pilar Reyes",
++      "Sebastián Ocampo",
++    ],
++  },
++  {
++    name: "Diseño",
++    roles: ["UX Designer", "UI Designer", "Service Designer"],
++    employees: ["Paula Ibáñez", "Nicolás Araya", "Milena Torres", "Raúl Pino"],
++  },
++] as const;
 +
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.projects);
-+  }
++const taskTopics = [
++  "Integración módulo",
++  "Refactor de flujo",
++  "Plan de validación",
++  "Diseño de interfaz",
++  "Pruebas de carga",
++  "Ajustes de arquitectura",
++  "Automatización de checklist",
++  "Optimización de pipeline",
++  "Documentación operativa",
++  "Análisis de riesgos",
++] as const;
 +
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+    if (!body || typeof body.name !== 'string' || !body.name.trim()) {
-+      return res.status(400).json({ error: 'name is required.' });
-+    }
++const taskDescriptions = [
++  "Alineación con stakeholders y definición de entregables del sprint.",
++  "Implementación incremental con foco en estabilidad y mantenibilidad.",
++  "Cobertura de casos borde y definición de criterios de aceptación.",
++  "Revisión cruzada entre equipos para minimizar bloqueos de dependencia.",
++  "Preparación de demo ejecutiva con indicadores de avance.",
++] as const;
 +
-+    const name = body.name.trim();
-+    if (store.projects.some((project) => project.name.toLowerCase() === name.toLowerCase())) {
-+      return res.status(409).json({ error: 'Project.name must be unique.' });
-+    }
++const createSeededRandom = (seed: number) => {
++  let state = seed;
++  return () => {
++    state = (state * 1664525 + 1013904223) % 4294967296;
++    return state / 4294967296;
++  };
++};
 +
-+    if (body.color !== undefined && (typeof body.color !== 'string' || !hexColorRegex.test(body.color))) {
-+      return res.status(400).json({ error: 'color must be a valid hex code.' });
-+    }
++const rng = createSeededRandom(24022026);
 +
-+    const project = { id: id('pro', store), name, color: body.color ?? null, isActive: true };
-+    store.projects.push(project);
-+    return res.status(201).json(project);
-+  }
++const randomInt = (min: number, max: number) =>
++  Math.floor(rng() * (max - min + 1)) + min;
 +
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/api/task-assignments/[id].js b/api/task-assignments/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..960ad92ea374c2d1a7df07ab1c803aa996342a5a
---- /dev/null
-+++ b/api/task-assignments/[id].js
-@@ -0,0 +1,46 @@
-+import { getStore } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed } from '../../lib/api.js';
++const pickOne = <T,>(items: readonly T[]): T => {
++  const index = Math.floor(rng() * items.length);
++  return items[index];
++};
 +
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const assignment = store.taskAssignments.find((item) => item.id === parseId(req));
++const projectIds = Object.keys(projectCatalog) as ProjectId[];
 +
-+  if (!assignment) {
-+    return res.status(404).json({ error: 'TaskAssignment not found.' });
-+  }
++const buildEmployeeProfiles = (): EmployeeProfile[] => {
++  const output: EmployeeProfile[] = [];
 +
-+  if (req.method === 'GET') {
-+    return res.status(200).json(assignment);
-+  }
++  departments.forEach((department, departmentIndex) => {
++    department.employees.forEach((employeeName, employeeIndex) => {
++      const employeeId = `EMP-${department.name.slice(0, 2).toUpperCase()}-${String(employeeIndex + 1).padStart(2, "0")}`;
++      const weeklyCapacityHours = randomInt(34, 40);
++      const absenceStart = addDays(toDate(demoStartDate), randomInt(7, 60));
 +
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
-+
-+    if (body.allocationHours !== undefined && !isNonNegativeNumber(body.allocationHours)) {
-+      return res.status(400).json({ error: 'allocationHours must be >= 0.' });
-+    }
-+
-+    const nextTaskId = body.taskId ?? assignment.taskId;
-+    const nextEmployeeId = body.employeeId ?? assignment.employeeId;
-+
-+    if (store.taskAssignments.some((item) => item.id !== assignment.id && item.taskId === nextTaskId && item.employeeId === nextEmployeeId)) {
-+      return res.status(409).json({ error: 'TaskAssignment (taskId, employeeId) must be unique.' });
-+    }
-+
-+    Object.assign(assignment, {
-+      ...(body.taskId !== undefined ? { taskId: body.taskId } : {}),
-+      ...(body.employeeId !== undefined ? { employeeId: body.employeeId } : {}),
-+      ...(body.allocationHours !== undefined ? { allocationHours: body.allocationHours } : {}),
++      output.push({
++        employeeId,
++        employeeName,
++        department: department.name,
++        role: department.roles[(employeeIndex + departmentIndex) % department.roles.length],
++        hourlyCost: randomInt(28, 64),
++        weeklyCapacityHours,
++        absences:
++          rng() > 0.45
++            ? [
++                {
++                  startDate: formatISODate(absenceStart),
++                  endDate: formatISODate(addDays(absenceStart, randomInt(1, 3))),
++                  reason: pickOne(["Vacaciones", "Formación", "Permiso"]) as string,
++                },
++              ]
++            : [],
++      });
 +    });
++  });
 +
-+    return res.status(200).json(assignment);
-+  }
++  return output;
++};
 +
-+  if (req.method === 'DELETE') {
-+    store.taskAssignments = store.taskAssignments.filter((item) => item.id !== assignment.id);
-+    return res.status(204).end();
-+  }
++export const employeeProfiles = buildEmployeeProfiles();
 +
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
-+}
-diff --git a/api/task-assignments/index.js b/api/task-assignments/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..320625c0119cb695b46f3b07debf87ad7bdad74d
---- /dev/null
-+++ b/api/task-assignments/index.js
-@@ -0,0 +1,40 @@
-+import { getStore, id } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, sendMethodNotAllowed } from '../../lib/api.js';
+ const withProject = (
+-  projectId: keyof typeof projectCatalog,
++  projectId: ProjectId,
+   task: Omit<WorkPackage, "projectId" | "projectName" | "projectColor">,
+ ): WorkPackage => ({
+   ...task,
+   projectId,
+   projectName: projectCatalog[projectId].name,
+   projectColor: projectCatalog[projectId].color,
+ });
+ 
+-export const workPackages: WorkPackage[] = [
+-  withProject("P-RHEIN", {
+-    id: "HW-101",
+-    department: "Hardware",
+-    employeeId: "EMP-HW-01",
+-    employeeName: "María Rojas",
+-    title: "Diseño de fuente conmutada",
+-    description: "Topología inicial y validación de componentes críticos.",
+-    earliestStartDate: "2026-02-02",
+-    deadlineDate: "2026-02-11",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-02",
+-    dependencies: [],
+-  }),
+-  withProject("P-ANDEN", {
+-    id: "HW-102",
+-    department: "Hardware",
+-    employeeId: "EMP-HW-02",
+-    employeeName: "Luis Mendoza",
+-    title: "Selección de sensores IMU",
+-    description: "Comparativa de ruido, consumo y disponibilidad de mercado.",
+-    earliestStartDate: "2026-02-03",
+-    deadlineDate: "2026-02-12",
+-    durationDays: 3,
+-    scheduledStartDate: "2026-02-04",
+-    dependencies: [],
+-  }),
+-  withProject("P-AURORA", {
+-    id: "HW-103",
+-    department: "Hardware",
+-    employeeId: "EMP-HW-03",
+-    employeeName: "Ana Pardo",
+-    title: "Pre-check EMC de prototipo",
+-    description:
+-      "Barrido preliminar de emisiones antes de laboratorio externo.",
+-    earliestStartDate: "2026-02-10",
+-    deadlineDate: "2026-02-20",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-12",
+-    dependencies: [{ type: "FS", taskId: "HW-101" }],
+-  }),
+-  withProject("P-ATLAS", {
+-    id: "HW-104",
+-    department: "Hardware",
+-    employeeId: "EMP-HW-01",
+-    employeeName: "María Rojas",
+-    title: "Revisión DFM PCB",
+-    description: "Ajustes de manufactura para lotes piloto y panelizado.",
+-    earliestStartDate: "2026-02-15",
+-    deadlineDate: "2026-02-27",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-18",
+-    dependencies: [{ type: "SS", taskId: "HW-103" }],
+-  }),
+-
+-  withProject("P-RHEIN", {
+-    id: "SW-201",
+-    department: "Software",
+-    employeeId: "EMP-SW-01",
+-    employeeName: "Diego León",
+-    title: "Arquitectura de firmware base",
+-    description: "Definición de capas HAL, drivers y servicios.",
+-    earliestStartDate: "2026-02-02",
+-    deadlineDate: "2026-02-10",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-03",
+-    dependencies: [],
+-  }),
+-  withProject("P-RHEIN", {
+-    id: "SW-202",
+-    department: "Software",
+-    employeeId: "EMP-SW-01",
+-    employeeName: "Diego León",
+-    title: "Drivers UART/I2C",
+-    description: "Implementación y pruebas unitarias de comunicación serial.",
+-    earliestStartDate: "2026-02-08",
+-    deadlineDate: "2026-02-18",
+-    durationDays: 5,
+-    scheduledStartDate: "2026-02-09",
+-    dependencies: [{ type: "FS", taskId: "SW-201" }],
+-  }),
+-  withProject("P-ANDEN", {
+-    id: "SW-203",
+-    department: "Software",
+-    employeeId: "EMP-SW-02",
+-    employeeName: "Sofia Nieto",
+-    title: "API de telemetría",
+-    description: "Contrato JSON para eventos y métricas de sensores.",
+-    earliestStartDate: "2026-02-05",
+-    deadlineDate: "2026-02-16",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-06",
+-    dependencies: [],
+-  }),
+-  withProject("P-AURORA", {
+-    id: "SW-204",
+-    department: "Software",
+-    employeeId: "EMP-SW-02",
+-    employeeName: "Sófia Nieto",
+-    title: "Autenticación de dispositivos",
+-    description: "Flujo de enrolamiento con refresh tokens y expiración.",
+-    earliestStartDate: "2026-02-13",
+-    deadlineDate: "2026-02-23",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-14",
+-    dependencies: [{ type: "FS", taskId: "SW-203" }],
+-  }),
+-  withProject("P-ATLAS", {
+-    id: "SW-205",
+-    department: "Software",
+-    employeeId: "EMP-SW-03",
+-    employeeName: "Carlos Núñez",
+-    title: "Dashboard de diagnóstico",
+-    description: "Panel web para estado en vivo de nodos remotos.",
+-    earliestStartDate: "2026-02-16",
+-    deadlineDate: "2026-02-27",
+-    durationDays: 5,
+-    scheduledStartDate: "2026-02-17",
+-    dependencies: [{ type: "SS", taskId: "SW-202" }],
+-  }),
+-
+-  withProject("P-RHEIN", {
+-    id: "PR-301",
+-    department: "Producción",
+-    employeeId: "EMP-PR-01",
+-    employeeName: "Elena Torres",
+-    title: "Plan de montaje piloto",
+-    description: "Secuencia de estaciones y criterios de aceptación.",
+-    earliestStartDate: "2026-02-07",
+-    deadlineDate: "2026-02-17",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-08",
+-    dependencies: [{ type: "FS", taskId: "HW-101" }],
+-  }),
+-  withProject("P-ANDEN", {
+-    id: "PR-302",
+-    department: "Producción",
+-    employeeId: "EMP-PR-02",
+-    employeeName: "Jorge Vidal",
+-    title: "Balanceo de línea inicial",
+-    description:
+-      "Distribución de carga por estación para reducir cuellos de botella.",
+-    earliestStartDate: "2026-02-12",
+-    deadlineDate: "2026-02-22",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-13",
+-    dependencies: [{ type: "FS", taskId: "PR-301" }],
+-  }),
+-  withProject("P-AURORA", {
+-    id: "PR-303",
+-    department: "Producción",
+-    employeeId: "EMP-PR-03",
+-    employeeName: "Valeria Solís",
+-    title: "Checklist de calidad inicial",
+-    description: "Control visual, eléctrico y trazabilidad de lote.",
+-    earliestStartDate: "2026-02-10",
+-    deadlineDate: "2026-02-18",
+-    durationDays: 3,
+-    scheduledStartDate: "2026-02-10",
+-    dependencies: [],
+-  }),
+-  withProject("P-ATLAS", {
+-    id: "PR-304",
+-    department: "Producción",
+-    employeeId: "EMP-PR-03",
+-    employeeName: "Valeria Solís",
+-    title: "Corrida piloto de empaque",
+-    description: "Validación de etiquetas multi-idioma y cajas master.",
+-    earliestStartDate: "2026-02-19",
+-    deadlineDate: "2026-03-01",
+-    durationDays: 4,
+-    scheduledStartDate: "2026-02-20",
+-    dependencies: [{ type: "FS", taskId: "PR-303" }],
+-  }),
+-];
++export const workPackages: WorkPackage[] = employeeProfiles.flatMap((employee, employeeIndex) => {
++  const taskCount = randomInt(4, 8);
 +
-+export default async function handler(req, res) {
-+  const store = getStore();
++  return Array.from({ length: taskCount }, (_, taskIndex) => {
++    const projectId = pickOne(projectIds);
++    const startOffset = randomInt(0, timelineWeeks * 7 - 14);
++    const durationDays = randomInt(2, 6);
++    const startDate = addDays(toDate(demoStartDate), startOffset);
++    const dependencyTaskId = taskIndex > 0 ? `${employee.employeeId}-TSK-${taskIndex}` : null;
 +
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.taskAssignments);
-+  }
-+
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+    if (!body || typeof body.taskId !== 'string' || typeof body.employeeId !== 'string') {
-+      return res.status(400).json({ error: 'taskId and employeeId are required.' });
-+    }
-+
-+    if (!store.tasks.some((task) => task.id === body.taskId)) {
-+      return res.status(400).json({ error: 'taskId must exist.' });
-+    }
-+
-+    if (!store.employees.some((employee) => employee.id === body.employeeId)) {
-+      return res.status(400).json({ error: 'employeeId must exist.' });
-+    }
-+
-+    if (!isNonNegativeNumber(body.allocationHours)) {
-+      return res.status(400).json({ error: 'allocationHours must be >= 0.' });
-+    }
-+
-+    if (store.taskAssignments.some((item) => item.taskId === body.taskId && item.employeeId === body.employeeId)) {
-+      return res.status(409).json({ error: 'TaskAssignment (taskId, employeeId) must be unique.' });
-+    }
-+
-+    const assignment = { id: id('asg', store), taskId: body.taskId, employeeId: body.employeeId, allocationHours: body.allocationHours };
-+    store.taskAssignments.push(assignment);
-+
-+    return res.status(201).json(assignment);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/api/tasks/[id].js b/api/tasks/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..e93c5421266ecb928b6d117935b0fec407a0ee6b
---- /dev/null
-+++ b/api/tasks/[id].js
-@@ -0,0 +1,67 @@
-+import { getStore, taskStatuses } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, parseId, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const task = store.tasks.find((item) => item.id === parseId(req));
-+
-+  if (!task) {
-+    return res.status(404).json({ error: 'Task not found.' });
-+  }
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(task);
-+  }
-+
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
-+
-+    if (body.projectId !== undefined && !store.projects.some((project) => project.id === body.projectId)) {
-+      return res.status(400).json({ error: 'Task.projectId must exist.' });
-+    }
-+
-+    if (body.departmentId !== undefined && !store.departments.some((department) => department.id === body.departmentId)) {
-+      return res.status(400).json({ error: 'Task.departmentId must exist.' });
-+    }
-+
-+    if (body.estimatedHours !== undefined && !isNonNegativeNumber(body.estimatedHours)) {
-+      return res.status(400).json({ error: 'estimatedHours must be >= 0.' });
-+    }
-+
-+    if (body.status !== undefined && !taskStatuses.includes(body.status)) {
-+      return res.status(400).json({ error: 'status must be a valid enum value.' });
-+    }
-+
-+    const startDate = body.startDate ?? task.startDate;
-+    const endDate = body.endDate ?? task.endDate;
-+    const dateCheck = validateDateRange(startDate, endDate);
-+    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
-+
-+    Object.assign(task, {
-+      ...(body.title !== undefined ? { title: body.title.trim() } : {}),
-+      ...(body.description !== undefined ? { description: body.description } : {}),
-+      ...(body.projectId !== undefined ? { projectId: body.projectId } : {}),
-+      ...(body.departmentId !== undefined ? { departmentId: body.departmentId } : {}),
-+      ...(body.estimatedHours !== undefined ? { estimatedHours: body.estimatedHours } : {}),
-+      ...(body.status !== undefined ? { status: body.status } : {}),
-+      ...(body.priority !== undefined ? { priority: body.priority } : {}),
-+      ...(typeof body.isActive === 'boolean' ? { isActive: body.isActive } : {}),
-+      startDate: dateCheck.start,
-+      endDate: dateCheck.end,
++    return withProject(projectId, {
++      id: `${employee.employeeId}-TSK-${taskIndex + 1}`,
++      department: employee.department,
++      employeeId: employee.employeeId,
++      employeeName: employee.employeeName,
++      title: `${pickOne(taskTopics)} ${taskIndex + 1}`,
++      description: `${pickOne(taskDescriptions)} Equipo: ${employee.department}.`,
++      earliestStartDate: formatISODate(addDays(startDate, -randomInt(0, 2))),
++      deadlineDate: formatISODate(addDays(startDate, durationDays + randomInt(2, 6))),
++      durationDays,
++      scheduledStartDate: formatISODate(startDate),
++      dependencies: dependencyTaskId ? [{ type: pickOne(["FS", "SS"]), taskId: dependencyTaskId }] : [],
 +    });
-+
-+    return res.status(200).json(task);
-+  }
-+
-+  if (req.method === 'DELETE') {
-+    if (store.taskAssignments.some((assignment) => assignment.taskId === task.id)) {
-+      return res.status(409).json({ error: 'Task cannot be deleted because it has assignments.' });
-+    }
-+
-+    store.tasks = store.tasks.filter((item) => item.id !== task.id);
-+    return res.status(204).end();
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
-+}
-diff --git a/api/tasks/index.js b/api/tasks/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..b1ba5cd2bbb87137dfd118e7fd4e0fb8ccdf7357
---- /dev/null
-+++ b/api/tasks/index.js
-@@ -0,0 +1,59 @@
-+import { getStore, id, taskStatuses } from '../../lib/store.js';
-+import { isNonNegativeNumber, parseBody, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.tasks);
-+  }
-+
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+    if (!body || typeof body.title !== 'string' || !body.title.trim()) {
-+      return res.status(400).json({ error: 'title is required.' });
-+    }
-+
-+    if (!store.projects.some((project) => project.id === body.projectId)) {
-+      return res.status(400).json({ error: 'Task.projectId must exist.' });
-+    }
-+
-+    if (!store.departments.some((department) => department.id === body.departmentId)) {
-+      return res.status(400).json({ error: 'Task.departmentId must exist.' });
-+    }
-+
-+    const dateCheck = validateDateRange(body.startDate, body.endDate);
-+    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
-+
-+    if (!isNonNegativeNumber(body.estimatedHours ?? 0)) {
-+      return res.status(400).json({ error: 'estimatedHours must be >= 0.' });
-+    }
-+
-+    if (body.status !== undefined && !taskStatuses.includes(body.status)) {
-+      return res.status(400).json({ error: 'status must be a valid enum value.' });
-+    }
-+
-+    if (body.priority !== undefined && (!Number.isInteger(body.priority) || body.priority < 1 || body.priority > 5)) {
-+      return res.status(400).json({ error: 'priority must be between 1 and 5.' });
-+    }
-+
-+    const task = {
-+      id: id('tsk', store),
-+      title: body.title.trim(),
-+      description: body.description ?? null,
-+      projectId: body.projectId,
-+      departmentId: body.departmentId,
-+      startDate: dateCheck.start,
-+      endDate: dateCheck.end,
-+      estimatedHours: body.estimatedHours ?? 0,
-+      status: body.status ?? 'PLANNED',
-+      priority: body.priority ?? null,
-+      isActive: true,
-+    };
-+
-+    store.tasks.push(task);
-+    return res.status(201).json(task);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/api/time-off/[id].js b/api/time-off/[id].js
-new file mode 100644
-index 0000000000000000000000000000000000000000..84fcb509837faccf6110544e2c47bc742506c056
---- /dev/null
-+++ b/api/time-off/[id].js
-@@ -0,0 +1,44 @@
-+import { getStore, timeOffTypes } from '../../lib/store.js';
-+import { parseBody, parseId, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+  const entry = store.timeOff.find((item) => item.id === parseId(req));
-+
-+  if (!entry) {
-+    return res.status(404).json({ error: 'TimeOff not found.' });
-+  }
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(entry);
-+  }
-+
-+  if (req.method === 'PATCH') {
-+    const body = parseBody(req);
-+    if (!body) return res.status(400).json({ error: 'Invalid body.' });
-+
-+    if (body.type !== undefined && !timeOffTypes.includes(body.type)) {
-+      return res.status(400).json({ error: 'type must be a valid enum value.' });
-+    }
-+
-+    const dateCheck = validateDateRange(body.startDate ?? entry.startDate, body.endDate ?? entry.endDate);
-+    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
-+
-+    Object.assign(entry, {
-+      ...(body.employeeId !== undefined ? { employeeId: body.employeeId } : {}),
-+      ...(body.type !== undefined ? { type: body.type } : {}),
-+      ...(body.notes !== undefined ? { notes: body.notes } : {}),
-+      startDate: dateCheck.start,
-+      endDate: dateCheck.end,
-+    });
-+
-+    return res.status(200).json(entry);
-+  }
-+
-+  if (req.method === 'DELETE') {
-+    store.timeOff = store.timeOff.filter((item) => item.id !== entry.id);
-+    return res.status(204).end();
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'PATCH', 'DELETE']);
-+}
-diff --git a/api/time-off/index.js b/api/time-off/index.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..d4f38419a653e83d59a8e565c2be347078d1b542
---- /dev/null
-+++ b/api/time-off/index.js
-@@ -0,0 +1,43 @@
-+import { getStore, id, timeOffTypes } from '../../lib/store.js';
-+import { parseBody, sendMethodNotAllowed, validateDateRange } from '../../lib/api.js';
-+
-+export default async function handler(req, res) {
-+  const store = getStore();
-+
-+  if (req.method === 'GET') {
-+    return res.status(200).json(store.timeOff);
-+  }
-+
-+  if (req.method === 'POST') {
-+    const body = parseBody(req);
-+
-+    if (!body || typeof body.employeeId !== 'string') {
-+      return res.status(400).json({ error: 'employeeId is required.' });
-+    }
-+
-+    if (!store.employees.some((employee) => employee.id === body.employeeId)) {
-+      return res.status(400).json({ error: 'employeeId must exist.' });
-+    }
-+
-+    if (!timeOffTypes.includes(body.type)) {
-+      return res.status(400).json({ error: 'type must be a valid enum value.' });
-+    }
-+
-+    const dateCheck = validateDateRange(body.startDate, body.endDate);
-+    if (!dateCheck.ok) return res.status(400).json({ error: dateCheck.error });
-+
-+    const entry = {
-+      id: id('to', store),
-+      employeeId: body.employeeId,
-+      startDate: dateCheck.start,
-+      endDate: dateCheck.end,
-+      type: body.type,
-+      notes: body.notes ?? null,
-+    };
-+    store.timeOff.push(entry);
-+
-+    return res.status(201).json(entry);
-+  }
-+
-+  return sendMethodNotAllowed(res, ['GET', 'POST']);
-+}
-diff --git a/lib/api.js b/lib/api.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..a9688f3533df54241b2a7f8e3eb2f3c81b0d4860
---- /dev/null
-+++ b/lib/api.js
-@@ -0,0 +1,42 @@
-+export function sendMethodNotAllowed(res, allowedMethods) {
-+  res.setHeader('Allow', allowedMethods);
-+  return res.status(405).json({ error: `Method not allowed. Use: ${allowedMethods.join(', ')}` });
++  });
++});
+diff --git a/src/styles.css b/src/styles.css
+index 88a8d2b2da1ee9c616003b59fa8695382204f0f8..892f78fc9a052fd13f67135779f30098e325bbcb 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -71,155 +71,178 @@ header p {
+   font-size: 0.88rem;
+   color: #334155;
+ }
+ 
+ .legend-item i,
+ .project-chip i {
+   width: 12px;
+   height: 12px;
+   border-radius: 50%;
+   display: inline-block;
+ }
+ 
+ .timeline-shell {
+   background: #fff;
+   border: 1px solid #e2e8f0;
+   border-radius: 12px;
+   overflow: auto;
+   max-height: calc(100vh - 260px);
+ }
+ 
+ .timeline-header {
+   display: inline-flex;
+   min-width: max-content;
+   position: sticky;
+   top: 0;
+-  z-index: 4;
++  z-index: 8;
+   background: #f1f5f9;
+   border-bottom: 1px solid #cbd5e1;
+ }
+ 
+ .timeline-days {
+   display: flex;
+   flex-direction: column;
+ }
+ 
+ .week-header-row,
+ .day-header-row {
+   display: flex;
+ }
+ 
+ .week-header {
++  border: 0;
+   border-left: 1px solid #cbd5e1;
+   padding: 0.35rem 0.25rem;
+   min-height: var(--timeline-header-week-height);
+   font-size: 0.7rem;
+   display: flex;
+   gap: 0.25rem;
+   align-items: center;
+   min-width: 0;
+   overflow: hidden;
++  cursor: pointer;
++  background: #e2e8f0;
++  text-align: left;
 +}
 +
-+export function parseId(req) {
-+  return req.query.id;
++.week-header--active {
++  background: #cbd5e1;
++  outline: 2px solid #3b82f6;
++  outline-offset: -2px;
+ }
+ 
+ .week-label,
+ .week-range {
+   display: block;
+   min-width: 0;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+ 
+ .week-header strong {
+   font-size: 0.72rem;
+   flex: 0 1 auto;
+ }
+ 
+ .week-range {
+   flex: 1 1 auto;
+ }
+ 
+ .day-header {
+   border-left: 1px solid #cbd5e1;
+   padding: 0.35rem 0.2rem;
+   font-size: 0.7rem;
+   min-height: var(--timeline-header-day-height);
+   display: flex;
+   justify-content: center;
+   min-width: 0;
+ }
+ 
+ .day-label {
+   display: none;
+   width: 100%;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+ }
+ 
+ .day-label--default {
+   display: block;
+ }
+ 
+-.day-header strong {
+-  font-size: 0.72rem;
+-}
+-
+ .employee-label {
+   min-width: 220px;
+   border-right: 1px solid #cbd5e1;
++  border-bottom: 1px solid #f1f5f9;
+   padding: 0.65rem;
+   display: flex;
+   align-items: center;
+   justify-content: flex-start;
+   background: #fcfdff;
+-
++  position: sticky;
++  left: 0;
++  z-index: 6;
+   min-height: var(--timeline-row-height);
+   margin: 0;
+   line-height: 1.2;
+ }
+ 
++.employee-button {
++  width: 220px;
++  border-top: 0;
++  border-left: 0;
++  border-right: 1px solid #cbd5e1;
++  border-bottom: 1px solid #f1f5f9;
++  cursor: pointer;
++  font-weight: 600;
 +}
 +
-+export function parseBody(req) {
-+  if (typeof req.body === 'string') {
-+    try {
-+      return JSON.parse(req.body);
-+    } catch {
-+      return null;
-+    }
+ .employee-label.header {
+   font-size: 0.8rem;
+   font-weight: 700;
+   text-transform: uppercase;
++  z-index: 9;
+ }
+ 
+ .employee-row {
+   display: flex;
+   align-items: stretch;
+   min-height: var(--timeline-row-height);
+ }
+ 
+ .employee-timeline {
+   display: flex;
+   position: relative;
+   min-height: var(--timeline-row-height);
+ }
+ 
+ .day-cell {
+   border-left: 1px solid #f1f5f9;
++  position: absolute;
++  top: 0;
++  bottom: 0;
+ }
+ 
+ .task-block {
+   position: absolute;
+   top: 8px;
+   bottom: 8px;
+   border: 0;
+   border-radius: 8px;
+   color: #fff;
+   display: flex;
+   flex-direction: column;
+   align-items: flex-start;
+   justify-content: center;
+   padding: 0.2rem 0.4rem;
+   cursor: pointer;
+   text-align: left;
+   overflow: hidden;
+ }
+ 
+ .task-block-title {
+   font-size: 0.72rem;
+   font-weight: 700;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+@@ -293,34 +316,40 @@ header p {
+ .deadline {
+   color: #dc2626;
+ }
+ 
+ @media (max-width: 768px) {
+   .resource-timeline-page {
+     padding: 0.8rem;
+   }
+ 
+   .timeline-shell {
+     max-height: calc(100vh - 220px);
+   }
+ 
+   .week-header {
+     gap: 0.15rem;
+   }
+ 
+   .day-label--default {
+     display: none;
+   }
+ 
+   .day-label--compact {
+     display: block;
+   }
+ 
++  .employee-label,
++  .employee-button {
++    min-width: 160px;
++    width: 160px;
 +  }
-+  return req.body;
-+}
 +
-+export function isNonNegativeNumber(value) {
-+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
-+}
-+
-+export function validateDateRange(startDate, endDate) {
-+  const start = new Date(startDate);
-+  const end = new Date(endDate);
-+
-+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-+    return { ok: false, error: 'startDate and endDate must be valid ISO dates.' };
-+  }
-+
-+  if (end < start) {
-+    return { ok: false, error: 'endDate must be greater than or equal to startDate.' };
-+  }
-+
-+  return { ok: true, start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-+}
-+
-+export function conflict(res, message) {
-+  return res.status(409).json({ error: message });
-+}
-diff --git a/lib/store.js b/lib/store.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..49258110a44c6bafb0bae6b8a76c4e3c321a1073
---- /dev/null
-+++ b/lib/store.js
-@@ -0,0 +1,62 @@
-+const taskStatuses = ['PLANNED', 'IN_PROGRESS', 'DONE', 'BLOCKED'];
-+const timeOffTypes = ['VACATION', 'SICK', 'OTHER'];
-+
-+function createSeed() {
-+  const departments = [
-+    { id: 'dep_eng', name: 'Engineering', isActive: true },
-+    { id: 'dep_des', name: 'Design', isActive: true },
-+  ];
-+
-+  const employees = [
-+    { id: 'emp_alice', fullName: 'Alice Rivera', departmentId: 'dep_eng', capacityHoursPerWeek: 40, costPerHour: 65, isActive: true },
-+    { id: 'emp_bob', fullName: 'Bob Martín', departmentId: 'dep_eng', capacityHoursPerWeek: 35, costPerHour: null, isActive: true },
-+    { id: 'emp_carla', fullName: 'Carla Soto', departmentId: 'dep_des', capacityHoursPerWeek: 40, costPerHour: null, isActive: true },
-+  ];
-+
-+  const projects = [{ id: 'pro_web', name: 'Website Revamp', color: '#3B82F6', isActive: true }];
-+
-+  const tasks = [{
-+    id: 'tsk_onboarding',
-+    title: 'Implement onboarding flow',
-+    description: 'Crear onboarding inicial para usuarios nuevos.',
-+    projectId: 'pro_web',
-+    departmentId: 'dep_eng',
-+    startDate: '2026-02-16',
-+    endDate: '2026-02-27',
-+    estimatedHours: 80,
-+    status: 'IN_PROGRESS',
-+    priority: 2,
-+    isActive: true,
-+  }];
-+
-+  const taskAssignments = [
-+    { id: 'asg_alice_onboarding', taskId: 'tsk_onboarding', employeeId: 'emp_alice', allocationHours: 30 },
-+    { id: 'asg_bob_onboarding', taskId: 'tsk_onboarding', employeeId: 'emp_bob', allocationHours: 20 },
-+  ];
-+
-+  const timeOff = [{
-+    id: 'to_carla_1',
-+    employeeId: 'emp_carla',
-+    startDate: '2026-02-24',
-+    endDate: '2026-02-26',
-+    type: 'VACATION',
-+    notes: 'Vacaciones planificadas',
-+  }];
-+
-+  return { departments, employees, projects, tasks, taskAssignments, timeOff, nextId: 1 };
-+}
-+
-+function id(prefix, state) {
-+  const value = `${prefix}_${state.nextId}`;
-+  state.nextId += 1;
-+  return value;
-+}
-+
-+export function getStore() {
-+  if (!globalThis.__resourceStore) {
-+    globalThis.__resourceStore = createSeed();
-+  }
-+  return globalThis.__resourceStore;
-+}
-+
-+export { id, taskStatuses, timeOffTypes };
+   .modal-panel {
+     width: 100vw;
+   }
+ 
+   .modal-panel dl {
+     grid-template-columns: 1fr;
+     gap: 0.25rem;
+   }
+ }
+
