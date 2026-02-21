@@ -9,6 +9,7 @@ interface EmployeeRowProps {
   dayWidths: number[];
   cumulativeOffsets: number[];
   totalTimelineWidth: number;
+  nonWorkingDayByIndex: boolean[];
   onTaskSelect: (task: WorkPackage) => void;
   onEmployeeSelect: () => void;
 }
@@ -21,6 +22,7 @@ export const EmployeeRow = ({
   dayWidths,
   cumulativeOffsets,
   totalTimelineWidth,
+  nonWorkingDayByIndex,
   onTaskSelect,
   onEmployeeSelect,
 }: EmployeeRowProps) => {
@@ -33,7 +35,7 @@ export const EmployeeRow = ({
         {Array.from({ length: timelineDays }, (_, index) => (
           <div
             key={index}
-            className="day-cell"
+            className={`day-cell ${nonWorkingDayByIndex[index] ? "non-working-day" : ""}`}
             style={{ width: dayWidths[index], left: cumulativeOffsets[index] }}
           />
         ))}

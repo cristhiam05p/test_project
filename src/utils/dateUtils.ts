@@ -1,4 +1,8 @@
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const SATURDAY = 6;
+const SUNDAY = 0;
+
+const holidayCache = new Map<number, Set<string>>();
 
 export const toDate = (value: string): Date => {
   const date = new Date(`${value}T00:00:00`);
@@ -11,6 +15,95 @@ export const formatISODate = (date: Date): string =>
 export const addDays = (date: Date, days: number): Date => {
   const output = new Date(date);
   output.setDate(output.getDate() + days);
+  return output;
+};
+
+const getEasterSunday = (year: number): Date => {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+};
+
+const buildHolidaySetBW = (year: number): Set<string> => {
+  const easterSunday = getEasterSunday(year);
+
+  const staticHolidays = [
+    new Date(year, 0, 1),
+    new Date(year, 0, 6),
+    new Date(year, 4, 1),
+    new Date(year, 9, 3),
+    new Date(year, 10, 1),
+    new Date(year, 11, 25),
+    new Date(year, 11, 26),
+  ];
+
+  const dynamicHolidays = [
+    addDays(easterSunday, -2),
+    addDays(easterSunday, 1),
+    addDays(easterSunday, 39),
+    addDays(easterSunday, 50),
+    addDays(easterSunday, 60),
+  ];
+
+  return new Set(
+    [...staticHolidays, ...dynamicHolidays].map((holiday) => formatISODate(holiday)),
+  );
+};
+
+export const isWeekend = (date: Date): boolean => {
+  const day = date.getDay();
+  return day === SATURDAY || day === SUNDAY;
+};
+
+export const isHolidayBW = (date: Date): boolean => {
+  const year = date.getFullYear();
+  if (!holidayCache.has(year)) {
+    holidayCache.set(year, buildHolidaySetBW(year));
+  }
+
+  return holidayCache.get(year)!.has(formatISODate(date));
+};
+
+export const isWorkingDay = (date: Date): boolean => {
+  return !isWeekend(date) && !isHolidayBW(date);
+};
+
+export const getNextWorkingDay = (date: Date): Date => {
+  const output = new Date(date);
+  while (!isWorkingDay(output)) {
+    output.setDate(output.getDate() + 1);
+  }
+  return output;
+};
+
+export const addWorkingDays = (date: Date, days: number): Date => {
+  if (days === 0) {
+    return getNextWorkingDay(date);
+  }
+
+  const output = new Date(date);
+  const direction = days > 0 ? 1 : -1;
+  let remaining = Math.abs(days);
+
+  while (remaining > 0) {
+    output.setDate(output.getDate() + direction);
+    if (isWorkingDay(output)) {
+      remaining -= 1;
+    }
+  }
+
   return output;
 };
 
