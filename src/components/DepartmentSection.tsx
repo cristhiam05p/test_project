@@ -1,14 +1,17 @@
-import type { WorkPackage } from '../types/workPackage';
-import type { EmployeeGroup } from '../utils/timelineUtils';
-import { EmployeeRow } from './EmployeeRow';
+import type { WorkPackage } from "../types/workPackage";
+import type { EmployeeGroup } from "../utils/timelineUtils";
+import { EmployeeRow } from "./EmployeeRow";
 
 interface DepartmentSectionProps {
   department: string;
   employees: EmployeeGroup[];
   timelineStartDate: string;
   timelineDays: number;
-  dayWidth: number;
+  dayWidths: number[];
+  cumulativeOffsets: number[];
+  totalTimelineWidth: number;
   onTaskSelect: (task: WorkPackage) => void;
+  onEmployeeSelect: (employeeId: string) => void;
 }
 
 export const DepartmentSection = ({
@@ -16,8 +19,11 @@ export const DepartmentSection = ({
   employees,
   timelineStartDate,
   timelineDays,
-  dayWidth,
+  dayWidths,
+  cumulativeOffsets,
+  totalTimelineWidth,
   onTaskSelect,
+  onEmployeeSelect,
 }: DepartmentSectionProps) => {
   return (
     <section className="department-section">
@@ -29,8 +35,11 @@ export const DepartmentSection = ({
           tasks={employee.tasks}
           timelineStartDate={timelineStartDate}
           timelineDays={timelineDays}
-          dayWidth={dayWidth}
+          dayWidths={dayWidths}
+          cumulativeOffsets={cumulativeOffsets}
+          totalTimelineWidth={totalTimelineWidth}
           onTaskSelect={onTaskSelect}
+          onEmployeeSelect={() => onEmployeeSelect(employee.employeeId)}
         />
       ))}
     </section>

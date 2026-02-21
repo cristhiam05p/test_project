@@ -1,16 +1,159 @@
+import { addDays, formatISODate, toDate } from "../utils/dateUtils";
 import type { WorkPackage } from "../types/workPackage";
 
+export interface EmployeeProfile {
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  role: string;
+  hourlyCost: number;
+  weeklyCapacityHours: number;
+  absences: { startDate: string; endDate: string; reason: string }[];
+}
+
 export const demoStartDate = "2026-02-02";
+export const timelineWeeks = 12;
 
 export const projectCatalog = {
   "P-RHEIN": { name: "Project Rhein", color: "#2563eb" },
   "P-ANDEN": { name: "Project Anden", color: "#0f766e" },
   "P-AURORA": { name: "Project Aurora", color: "#7c3aed" },
   "P-ATLAS": { name: "Project Atlas", color: "#c2410c" },
+  "P-DELTA": { name: "Project Delta", color: "#db2777" },
+  "P-NOVA": { name: "Project Nova", color: "#0891b2" },
 } as const;
 
+type ProjectId = keyof typeof projectCatalog;
+
+const departments = [
+  {
+    name: "Hardware",
+    roles: ["Electronics Engineer", "PCB Designer", "Validation Engineer"],
+    employees: [
+      "María Rojas",
+      "Luis Mendoza",
+      "Ana Pardo",
+      "Renata Blanco",
+      "Iván Cornejo",
+    ],
+  },
+  {
+    name: "Software",
+    roles: ["Firmware Engineer", "Backend Engineer", "Frontend Engineer"],
+    employees: [
+      "Diego León",
+      "Sofía Nieto",
+      "Carlos Núñez",
+      "Tomás Vera",
+      "Elisa Cárdenas",
+    ],
+  },
+  {
+    name: "Producción",
+    roles: ["Process Engineer", "Quality Analyst", "Operations Lead"],
+    employees: [
+      "Elena Torres",
+      "Jorge Vidal",
+      "Valeria Solís",
+      "Martín Cuevas",
+      "Nadia Vega",
+    ],
+  },
+  {
+    name: "QA",
+    roles: ["QA Analyst", "Automation Engineer", "Reliability Engineer"],
+    employees: [
+      "Gabriela Soto",
+      "Leandro Flores",
+      "Pilar Reyes",
+      "Sebastián Ocampo",
+    ],
+  },
+  {
+    name: "Diseño",
+    roles: ["UX Designer", "UI Designer", "Service Designer"],
+    employees: ["Paula Ibáñez", "Nicolás Araya", "Milena Torres", "Raúl Pino"],
+  },
+] as const;
+
+const taskTopics = [
+  "Integración módulo",
+  "Refactor de flujo",
+  "Plan de validación",
+  "Diseño de interfaz",
+  "Pruebas de carga",
+  "Ajustes de arquitectura",
+  "Automatización de checklist",
+  "Optimización de pipeline",
+  "Documentación operativa",
+  "Análisis de riesgos",
+] as const;
+
+const taskDescriptions = [
+  "Alineación con stakeholders y definición de entregables del sprint.",
+  "Implementación incremental con foco en estabilidad y mantenibilidad.",
+  "Cobertura de casos borde y definición de criterios de aceptación.",
+  "Revisión cruzada entre equipos para minimizar bloqueos de dependencia.",
+  "Preparación de demo ejecutiva con indicadores de avance.",
+] as const;
+
+const createSeededRandom = (seed: number) => {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+};
+
+const rng = createSeededRandom(24022026);
+
+const randomInt = (min: number, max: number) =>
+  Math.floor(rng() * (max - min + 1)) + min;
+
+const pickOne = <T,>(items: readonly T[]): T => {
+  const index = Math.floor(rng() * items.length);
+  return items[index];
+};
+
+const projectIds = Object.keys(projectCatalog) as ProjectId[];
+
+const buildEmployeeProfiles = (): EmployeeProfile[] => {
+  const output: EmployeeProfile[] = [];
+
+  departments.forEach((department, departmentIndex) => {
+    department.employees.forEach((employeeName, employeeIndex) => {
+      const employeeId = `EMP-${department.name.slice(0, 2).toUpperCase()}-${String(employeeIndex + 1).padStart(2, "0")}`;
+      const weeklyCapacityHours = randomInt(34, 40);
+      const absenceStart = addDays(toDate(demoStartDate), randomInt(7, 60));
+
+      output.push({
+        employeeId,
+        employeeName,
+        department: department.name,
+        role: department.roles[(employeeIndex + departmentIndex) % department.roles.length],
+        hourlyCost: randomInt(28, 64),
+        weeklyCapacityHours,
+        absences:
+          rng() > 0.45
+            ? [
+                {
+                  startDate: formatISODate(absenceStart),
+                  endDate: formatISODate(addDays(absenceStart, randomInt(1, 3))),
+                  reason: pickOne(["Vacaciones", "Formación", "Permiso"]) as string,
+                },
+              ]
+            : [],
+      });
+    });
+  });
+
+  return output;
+};
+
+export const employeeProfiles = buildEmployeeProfiles();
+
 const withProject = (
-  projectId: keyof typeof projectCatalog,
+  projectId: ProjectId,
   task: Omit<WorkPackage, "projectId" | "projectName" | "projectColor">,
 ): WorkPackage => ({
   ...task,
@@ -19,178 +162,28 @@ const withProject = (
   projectColor: projectCatalog[projectId].color,
 });
 
-export const workPackages: WorkPackage[] = [
-  withProject("P-RHEIN", {
-    id: "HW-101",
-    department: "Hardware",
-    employeeId: "EMP-HW-01",
-    employeeName: "María Rojas",
-    title: "Diseño de fuente conmutada",
-    description: "Topología inicial y validación de componentes críticos.",
-    earliestStartDate: "2026-02-02",
-    deadlineDate: "2026-02-11",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-02",
-    dependencies: [],
-  }),
-  withProject("P-ANDEN", {
-    id: "HW-102",
-    department: "Hardware",
-    employeeId: "EMP-HW-02",
-    employeeName: "Luis Mendoza",
-    title: "Selección de sensores IMU",
-    description: "Comparativa de ruido, consumo y disponibilidad de mercado.",
-    earliestStartDate: "2026-02-03",
-    deadlineDate: "2026-02-12",
-    durationDays: 3,
-    scheduledStartDate: "2026-02-04",
-    dependencies: [],
-  }),
-  withProject("P-AURORA", {
-    id: "HW-103",
-    department: "Hardware",
-    employeeId: "EMP-HW-03",
-    employeeName: "Ana Pardo",
-    title: "Pre-check EMC de prototipo",
-    description:
-      "Barrido preliminar de emisiones antes de laboratorio externo.",
-    earliestStartDate: "2026-02-10",
-    deadlineDate: "2026-02-20",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-12",
-    dependencies: [{ type: "FS", taskId: "HW-101" }],
-  }),
-  withProject("P-ATLAS", {
-    id: "HW-104",
-    department: "Hardware",
-    employeeId: "EMP-HW-01",
-    employeeName: "María Rojas",
-    title: "Revisión DFM PCB",
-    description: "Ajustes de manufactura para lotes piloto y panelizado.",
-    earliestStartDate: "2026-02-15",
-    deadlineDate: "2026-02-27",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-18",
-    dependencies: [{ type: "SS", taskId: "HW-103" }],
-  }),
+export const workPackages: WorkPackage[] = employeeProfiles.flatMap((employee, employeeIndex) => {
+  const taskCount = randomInt(4, 8);
 
-  withProject("P-RHEIN", {
-    id: "SW-201",
-    department: "Software",
-    employeeId: "EMP-SW-01",
-    employeeName: "Diego León",
-    title: "Arquitectura de firmware base",
-    description: "Definición de capas HAL, drivers y servicios.",
-    earliestStartDate: "2026-02-02",
-    deadlineDate: "2026-02-10",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-03",
-    dependencies: [],
-  }),
-  withProject("P-RHEIN", {
-    id: "SW-202",
-    department: "Software",
-    employeeId: "EMP-SW-01",
-    employeeName: "Diego León",
-    title: "Drivers UART/I2C",
-    description: "Implementación y pruebas unitarias de comunicación serial.",
-    earliestStartDate: "2026-02-08",
-    deadlineDate: "2026-02-18",
-    durationDays: 5,
-    scheduledStartDate: "2026-02-09",
-    dependencies: [{ type: "FS", taskId: "SW-201" }],
-  }),
-  withProject("P-ANDEN", {
-    id: "SW-203",
-    department: "Software",
-    employeeId: "EMP-SW-02",
-    employeeName: "Sofia Nieto",
-    title: "API de telemetría",
-    description: "Contrato JSON para eventos y métricas de sensores.",
-    earliestStartDate: "2026-02-05",
-    deadlineDate: "2026-02-16",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-06",
-    dependencies: [],
-  }),
-  withProject("P-AURORA", {
-    id: "SW-204",
-    department: "Software",
-    employeeId: "EMP-SW-02",
-    employeeName: "Sófia Nieto",
-    title: "Autenticación de dispositivos",
-    description: "Flujo de enrolamiento con refresh tokens y expiración.",
-    earliestStartDate: "2026-02-13",
-    deadlineDate: "2026-02-23",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-14",
-    dependencies: [{ type: "FS", taskId: "SW-203" }],
-  }),
-  withProject("P-ATLAS", {
-    id: "SW-205",
-    department: "Software",
-    employeeId: "EMP-SW-03",
-    employeeName: "Carlos Núñez",
-    title: "Dashboard de diagnóstico",
-    description: "Panel web para estado en vivo de nodos remotos.",
-    earliestStartDate: "2026-02-16",
-    deadlineDate: "2026-02-27",
-    durationDays: 5,
-    scheduledStartDate: "2026-02-17",
-    dependencies: [{ type: "SS", taskId: "SW-202" }],
-  }),
+  return Array.from({ length: taskCount }, (_, taskIndex) => {
+    const projectId = pickOne(projectIds);
+    const startOffset = randomInt(0, timelineWeeks * 7 - 14);
+    const durationDays = randomInt(2, 6);
+    const startDate = addDays(toDate(demoStartDate), startOffset);
+    const dependencyTaskId = taskIndex > 0 ? `${employee.employeeId}-TSK-${taskIndex}` : null;
 
-  withProject("P-RHEIN", {
-    id: "PR-301",
-    department: "Producción",
-    employeeId: "EMP-PR-01",
-    employeeName: "Elena Torres",
-    title: "Plan de montaje piloto",
-    description: "Secuencia de estaciones y criterios de aceptación.",
-    earliestStartDate: "2026-02-07",
-    deadlineDate: "2026-02-17",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-08",
-    dependencies: [{ type: "FS", taskId: "HW-101" }],
-  }),
-  withProject("P-ANDEN", {
-    id: "PR-302",
-    department: "Producción",
-    employeeId: "EMP-PR-02",
-    employeeName: "Jorge Vidal",
-    title: "Balanceo de línea inicial",
-    description:
-      "Distribución de carga por estación para reducir cuellos de botella.",
-    earliestStartDate: "2026-02-12",
-    deadlineDate: "2026-02-22",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-13",
-    dependencies: [{ type: "FS", taskId: "PR-301" }],
-  }),
-  withProject("P-AURORA", {
-    id: "PR-303",
-    department: "Producción",
-    employeeId: "EMP-PR-03",
-    employeeName: "Valeria Solís",
-    title: "Checklist de calidad inicial",
-    description: "Control visual, eléctrico y trazabilidad de lote.",
-    earliestStartDate: "2026-02-10",
-    deadlineDate: "2026-02-18",
-    durationDays: 3,
-    scheduledStartDate: "2026-02-10",
-    dependencies: [],
-  }),
-  withProject("P-ATLAS", {
-    id: "PR-304",
-    department: "Producción",
-    employeeId: "EMP-PR-03",
-    employeeName: "Valeria Solís",
-    title: "Corrida piloto de empaque",
-    description: "Validación de etiquetas multi-idioma y cajas master.",
-    earliestStartDate: "2026-02-19",
-    deadlineDate: "2026-03-01",
-    durationDays: 4,
-    scheduledStartDate: "2026-02-20",
-    dependencies: [{ type: "FS", taskId: "PR-303" }],
-  }),
-];
+    return withProject(projectId, {
+      id: `${employee.employeeId}-TSK-${taskIndex + 1}`,
+      department: employee.department,
+      employeeId: employee.employeeId,
+      employeeName: employee.employeeName,
+      title: `${pickOne(taskTopics)} ${taskIndex + 1}`,
+      description: `${pickOne(taskDescriptions)} Equipo: ${employee.department}.`,
+      earliestStartDate: formatISODate(addDays(startDate, -randomInt(0, 2))),
+      deadlineDate: formatISODate(addDays(startDate, durationDays + randomInt(2, 6))),
+      durationDays,
+      scheduledStartDate: formatISODate(startDate),
+      dependencies: dependencyTaskId ? [{ type: pickOne(["FS", "SS"]), taskId: dependencyTaskId }] : [],
+    });
+  });
+});

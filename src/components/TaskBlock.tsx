@@ -5,6 +5,8 @@ interface TaskBlockProps {
   task: WorkPackage;
   timelineStartDate: string;
   dayWidth: number;
+  dayWidths?: number[];
+  cumulativeOffsets?: number[];
   onSelect: (task: WorkPackage) => void;
 }
 
@@ -12,11 +14,23 @@ export const TaskBlock = ({
   task,
   timelineStartDate,
   dayWidth,
+  dayWidths,
+  cumulativeOffsets,
   onSelect,
 }: TaskBlockProps) => {
-  const left =
-    getTaskOffsetDays(timelineStartDate, task.scheduledStartDate) * dayWidth;
-  const width = task.durationDays * dayWidth;
+  const startOffset = getTaskOffsetDays(timelineStartDate, task.scheduledStartDate);
+  const hasVariableWidths = dayWidths && cumulativeOffsets && dayWidths.length > 0;
+
+  const left = hasVariableWidths
+    ? cumulativeOffsets[Math.max(0, startOffset)] ?? 0
+    : startOffset * dayWidth;
+
+  const width = hasVariableWidths
+    ? Array.from({ length: task.durationDays }, (_, index) => dayWidths[startOffset + index] ?? 0).reduce(
+        (total, current) => total + current,
+        0,
+      )
+    : task.durationDays * dayWidth;
 
   return (
     <button
