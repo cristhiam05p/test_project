@@ -93,7 +93,7 @@ header p {
   min-width: max-content;
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 8;
   background: #f1f5f9;
   border-bottom: 1px solid #cbd5e1;
 }
@@ -109,6 +109,7 @@ header p {
 }
 
 .week-header {
+  border: 0;
   border-left: 1px solid #cbd5e1;
   padding: 0.35rem 0.25rem;
   min-height: var(--timeline-header-week-height);
@@ -118,6 +119,15 @@ header p {
   align-items: center;
   min-width: 0;
   overflow: hidden;
+  cursor: pointer;
+  background: #e2e8f0;
+  text-align: left;
+}
+
+.week-header--active {
+  background: #cbd5e1;
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
 }
 
 .week-label,
@@ -160,28 +170,38 @@ header p {
   display: block;
 }
 
-.day-header strong {
-  font-size: 0.72rem;
-}
-
 .employee-label {
   min-width: 220px;
   border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #f1f5f9;
   padding: 0.65rem;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   background: #fcfdff;
-
+  position: sticky;
+  left: 0;
+  z-index: 6;
   min-height: var(--timeline-row-height);
   margin: 0;
   line-height: 1.2;
+}
+
+.employee-button {
+  width: 220px;
+  border-top: 0;
+  border-left: 0;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .employee-label.header {
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
+  z-index: 9;
 }
 
 .employee-row {
@@ -198,6 +218,9 @@ header p {
 
 .day-cell {
   border-left: 1px solid #f1f5f9;
+  position: absolute;
+  top: 0;
+  bottom: 0;
 }
 
 .task-block {
@@ -313,6 +336,12 @@ header p {
 
   .day-label--compact {
     display: block;
+  }
+
+  .employee-label,
+  .employee-button {
+    min-width: 160px;
+    width: 160px;
   }
 
   .modal-panel {
