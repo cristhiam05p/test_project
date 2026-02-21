@@ -1,4 +1,11 @@
-import { addDays, formatISODate, toDate } from "../utils/dateUtils";
+import {
+  addDays,
+  addWorkingDays,
+  formatISODate,
+  getNextWorkingDay,
+  isWorkingDay,
+  toDate,
+} from "../utils/dateUtils";
 import type { WorkPackage } from "../types/workPackage";
 
 export interface EmployeeProfile {
@@ -116,6 +123,49 @@ const pickOne = <T,>(items: readonly T[]): T => {
 };
 
 const projectIds = Object.keys(projectCatalog) as ProjectId[];
+const TOTAL_TIMELINE_DAYS = timelineWeeks * 7;
+
+interface TaskSpan {
+  start: Date;
+  endExclusive: Date;
+}
+
+const getTaskEndExclusive = (start: Date, durationDays: number): Date => {
+  return addWorkingDays(start, durationDays);
+};
+
+const hasOverlap = (employeeTasks: TaskSpan[], candidate: TaskSpan): boolean => {
+  return employeeTasks.some(
+    (task) => candidate.start < task.endExclusive && candidate.endExclusive > task.start,
+  );
+};
+
+const placeTaskWithoutOverlap = (
+  existingTasks: TaskSpan[],
+  timelineStart: Date,
+  durationDays: number,
+): Date => {
+  const maxOffset = Math.max(0, TOTAL_TIMELINE_DAYS - 10);
+
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const startOffset = randomInt(0, maxOffset);
+    const candidateStart = getNextWorkingDay(addDays(timelineStart, startOffset));
+    const candidateSpan: TaskSpan = {
+      start: candidateStart,
+      endExclusive: getTaskEndExclusive(candidateStart, durationDays),
+    };
+
+    if (!hasOverlap(existingTasks, candidateSpan)) {
+      return candidateStart;
+    }
+  }
+
+  const sortedTasks = [...existingTasks].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+  const tailDate = sortedTasks.length > 0 ? sortedTasks[sortedTasks.length - 1].endExclusive : timelineStart;
+  return getNextWorkingDay(tailDate);
+};
 
 const buildEmployeeProfiles = (): EmployeeProfile[] => {
   const output: EmployeeProfile[] = [];
@@ -162,15 +212,29 @@ const withProject = (
   projectColor: projectCatalog[projectId].color,
 });
 
-export const workPackages: WorkPackage[] = employeeProfiles.flatMap((employee, employeeIndex) => {
+export const workPackages: WorkPackage[] = employeeProfiles.flatMap((employee) => {
   const taskCount = randomInt(4, 8);
+  const employeeTimelineStart = toDate(demoStartDate);
+  const placedTasks: TaskSpan[] = [];
 
   return Array.from({ length: taskCount }, (_, taskIndex) => {
     const projectId = pickOne(projectIds);
-    const startOffset = randomInt(0, timelineWeeks * 7 - 14);
     const durationDays = randomInt(2, 6);
-    const startDate = addDays(toDate(demoStartDate), startOffset);
+    const startDate = placeTaskWithoutOverlap(
+      placedTasks,
+      employeeTimelineStart,
+      durationDays,
+    );
+    const endExclusive = getTaskEndExclusive(startDate, durationDays);
     const dependencyTaskId = taskIndex > 0 ? `${employee.employeeId}-TSK-${taskIndex}` : null;
+
+    placedTasks.push({ start: startDate, endExclusive });
+
+    const earliestCandidate = addWorkingDays(startDate, -randomInt(0, 2));
+    const earliestStartDate = isWorkingDay(earliestCandidate)
+      ? earliestCandidate
+      : getNextWorkingDay(earliestCandidate);
+    const deadlineDate = addWorkingDays(endExclusive, randomInt(1, 5));
 
     return withProject(projectId, {
       id: `${employee.employeeId}-TSK-${taskIndex + 1}`,
@@ -179,8 +243,8 @@ export const workPackages: WorkPackage[] = employeeProfiles.flatMap((employee, e
       employeeName: employee.employeeName,
       title: `${pickOne(taskTopics)} ${taskIndex + 1}`,
       description: `${pickOne(taskDescriptions)} Equipo: ${employee.department}.`,
-      earliestStartDate: formatISODate(addDays(startDate, -randomInt(0, 2))),
-      deadlineDate: formatISODate(addDays(startDate, durationDays + randomInt(2, 6))),
+      earliestStartDate: formatISODate(earliestStartDate),
+      deadlineDate: formatISODate(deadlineDate),
       durationDays,
       scheduledStartDate: formatISODate(startDate),
       dependencies: dependencyTaskId ? [{ type: pickOne(["FS", "SS"]), taskId: dependencyTaskId }] : [],

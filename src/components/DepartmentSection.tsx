@@ -10,6 +10,7 @@ interface DepartmentSectionProps {
   dayWidths: number[];
   cumulativeOffsets: number[];
   totalTimelineWidth: number;
+  nonWorkingDayByIndex: boolean[];
   onTaskSelect: (task: WorkPackage) => void;
   onEmployeeSelect: (employeeId: string) => void;
 }
@@ -22,6 +23,7 @@ export const DepartmentSection = ({
   dayWidths,
   cumulativeOffsets,
   totalTimelineWidth,
+  nonWorkingDayByIndex,
   onTaskSelect,
   onEmployeeSelect,
 }: DepartmentSectionProps) => {
@@ -38,6 +40,7 @@ export const DepartmentSection = ({
           dayWidths={dayWidths}
           cumulativeOffsets={cumulativeOffsets}
           totalTimelineWidth={totalTimelineWidth}
+          nonWorkingDayByIndex={nonWorkingDayByIndex}
           onTaskSelect={onTaskSelect}
           onEmployeeSelect={() => onEmployeeSelect(employee.employeeId)}
         />

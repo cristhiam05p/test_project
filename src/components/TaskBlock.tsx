@@ -1,4 +1,5 @@
 import type { WorkPackage } from "../types/workPackage";
+import { addWorkingDays, differenceInDays, toDate } from "../utils/dateUtils";
 import { getTaskOffsetDays } from "../utils/timelineUtils";
 
 interface TaskBlockProps {
@@ -20,17 +21,20 @@ export const TaskBlock = ({
 }: TaskBlockProps) => {
   const startOffset = getTaskOffsetDays(timelineStartDate, task.scheduledStartDate);
   const hasVariableWidths = dayWidths && cumulativeOffsets && dayWidths.length > 0;
+  const taskStart = toDate(task.scheduledStartDate);
+  const taskEndExclusive = addWorkingDays(taskStart, task.durationDays);
+  const taskSpanDays = Math.max(1, differenceInDays(taskStart, taskEndExclusive));
 
   const left = hasVariableWidths
     ? cumulativeOffsets[Math.max(0, startOffset)] ?? 0
     : startOffset * dayWidth;
 
   const width = hasVariableWidths
-    ? Array.from({ length: task.durationDays }, (_, index) => dayWidths[startOffset + index] ?? 0).reduce(
+    ? Array.from({ length: taskSpanDays }, (_, index) => dayWidths[startOffset + index] ?? 0).reduce(
         (total, current) => total + current,
         0,
       )
-    : task.durationDays * dayWidth;
+    : taskSpanDays * dayWidth;
 
   return (
     <button

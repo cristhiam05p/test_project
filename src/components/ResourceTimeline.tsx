@@ -7,6 +7,8 @@ import {
   getDayRange,
   getWeekHeaderGroups,
   getWeekLabel,
+  isHolidayBW,
+  isWeekend,
 } from "../utils/dateUtils";
 import { includesNormalized } from "../utils/textUtils";
 import { groupByDepartmentAndEmployee } from "../utils/timelineUtils";
@@ -22,7 +24,6 @@ interface ResourceTimelineProps {
 }
 
 const DAY_WIDTH = 42;
-const EXPANDED_DAY_WIDTH = 72;
 const WEEK_RANGE_MIN_WIDTH = 150;
 
 const getCompactDayLabel = (day: Date): string =>
@@ -38,7 +39,6 @@ export const ResourceTimeline = ({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string>("Todos");
   const [employeeQuery, setEmployeeQuery] = useState<string>("");
-  const [expandedWeekKey, setExpandedWeekKey] = useState<string | null>(null);
 
   const departments = useMemo(
     () => ["Todos", ...new Set(tasks.map((task) => task.department))],
@@ -93,15 +93,7 @@ export const ResourceTimeline = ({
     [dayRange],
   );
 
-  // Decisión: modo accordion para KW (solo una semana expandida a la vez).
-  const dayWidths = useMemo(() => {
-    const weekByDay = dayRange.map((day) => {
-      const matchingWeek = weekHeaderGroups.find((group) => day >= group.weekStart && day <= group.weekEnd);
-      return matchingWeek?.key;
-    });
-
-    return weekByDay.map((weekKey) => (weekKey && weekKey === expandedWeekKey ? EXPANDED_DAY_WIDTH : DAY_WIDTH));
-  }, [dayRange, weekHeaderGroups, expandedWeekKey]);
+  const dayWidths = useMemo(() => dayRange.map(() => DAY_WIDTH), [dayRange]);
 
   const cumulativeOffsets = useMemo(() => {
     let acc = 0;
@@ -115,6 +107,11 @@ export const ResourceTimeline = ({
   const totalTimelineWidth = useMemo(
     () => dayWidths.reduce((sum, width) => sum + width, 0),
     [dayWidths],
+  );
+
+  const nonWorkingDayByIndex = useMemo(
+    () => dayRange.map((day) => isWeekend(day) || isHolidayBW(day)),
+    [dayRange],
   );
 
   const taskTitleById = useMemo(() => {
@@ -196,15 +193,12 @@ export const ResourceTimeline = ({
                   return sum + dayWidths[dayIndex];
                 }, 0);
                 const showWeekRange = weekWidth >= WEEK_RANGE_MIN_WIDTH;
-                const isActive = expandedWeekKey === weekGroup.key;
 
                 return (
-                  <button
+                  <div
                     key={weekGroup.key}
-                    className={`week-header ${isActive ? "week-header--active" : ""}`}
+                    className="week-header"
                     style={{ width: weekWidth }}
-                    type="button"
-                    onClick={() => setExpandedWeekKey((current) => (current === weekGroup.key ? null : weekGroup.key))}
                   >
                     <strong className="week-label">{getWeekLabel(weekGroup.weekStart)}</strong>
                     {showWeekRange ? (
@@ -213,7 +207,7 @@ export const ResourceTimeline = ({
                         {formatDayMonth(weekGroup.weekEnd)})
                       </span>
                     ) : null}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -222,7 +216,7 @@ export const ResourceTimeline = ({
               {dayRange.map((day, index) => (
                 <div
                   key={index}
-                  className="day-header"
+                  className={`day-header ${nonWorkingDayByIndex[index] ? "non-working-day" : ""}`}
                   style={{ width: dayWidths[index] }}
                 >
                   <span className="day-label day-label--default">{formatDayLabel(day)}</span>
@@ -246,6 +240,7 @@ export const ResourceTimeline = ({
               dayWidths={dayWidths}
               cumulativeOffsets={cumulativeOffsets}
               totalTimelineWidth={totalTimelineWidth}
+              nonWorkingDayByIndex={nonWorkingDayByIndex}
               onTaskSelect={setSelectedTask}
               onEmployeeSelect={setSelectedEmployeeId}
             />
